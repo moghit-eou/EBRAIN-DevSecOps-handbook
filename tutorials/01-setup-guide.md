@@ -1,18 +1,29 @@
 # Setup guide
-
+ 
 Goal: three independent, parallel pull request gates, one for Container
-Scanning, one for SCA, one for SAST.
-
+Scanning, one for SCA, one for SAST. This tutorial walks through Container
+Scanning end to end, since it is the pipeline with a complete reference
+implementation so far. SCA and SAST follow the same shape.
+ 
 ## Step 1: install the tools
-
-TODO: generalize setup-tools.sh, the --install-tool flag list, and SHA256
-pinning approach.
-
-## Step 2: wire up the three workflow files
-
-TODO: one workflow per pipeline, all triggered on pull_request,
-workflow_dispatch, and a schedule.
-
+ 
+Each pipeline installs only the tools it needs via `--install-tool`:
+ 
+```bash
+bash ci/setup-tools.sh --install-tool trivy,osv-scanner,opengrep,hadolint,semgrep-rules
+```
+ 
+Tool versions and their release-asset checksums are pinned inside the
+script itself, not passed here, see
+[Tool installation flags](../reference/tool-installation-flags.md).
+ 
+## Step 2: build what you're scanning
+ 
+Container Scanning scans a built image, not source. Build it first:
+ 
+```bash
+docker build -t <your-image>:local .
+``` 
 ## Step 3: set your severity thresholds
 
 TODO: CVSS thresholds for the CVSS gate, error-severity flags for the
