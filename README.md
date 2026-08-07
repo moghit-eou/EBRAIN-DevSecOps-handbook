@@ -71,11 +71,6 @@ Draft. The pattern has been implemented and proven on one repo, see the
 case study. Sections are being generalized and filled in one at a time;
 TODO markers indicate what is not written yet.
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Open an issue describing the gap
-before sending a pull request.
-
 ## Related
 
 OWASP DevSecOps Guideline, Vulnerability Scanning:
