@@ -41,3 +41,26 @@ variable, or verification fails by design.
 
 TODO: document the `# renovate:` marker convention, for teams that want
 Renovate to bump version and checksum together automatically.
+
+## Platform requirements
+
+`setup-tools.sh` targets Linux x86_64 and requires `bash`, `sudo`, `curl`,
+`tar`, and `sha256sum`. This matches GitHub's `ubuntu-latest` CI runners,
+which is the only environment this has been tested against.
+
+It does not run as-is on macOS or native Windows:
+
+- Every download URL points to a Linux-specific release asset (e.g.
+  `trivy_..._Linux-64bit.tar.gz`, `hadolint-linux-x86_64`). There is no
+  branching for other OSes or CPU architectures (including ARM, e.g. Apple
+  Silicon).
+- `sha256sum` ships by default on Linux, not on macOS.
+- The script uses bash-specific syntax (`set -o pipefail`), so it will not
+  run correctly under a plain POSIX `sh`.
+
+**Windows**: use WSL2. It runs a real Linux userspace, so the script works
+unmodified inside a WSL2 Ubuntu shell.
+
+**macOS**: not currently supported natively. Either run the script inside
+a Linux container that mirrors the CI image, or treat this as an open item
+if native macOS support becomes a requirement.
