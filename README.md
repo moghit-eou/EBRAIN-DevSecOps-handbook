@@ -1,77 +1,153 @@
-# DevSecOps Handbook
+![GSoC logo](TODO-path-to-gsoc-logo.png)
+![EBRAINS logo](TODO-path-to-ebrains-logo.png)
 
-## Purpose
+<!-- TODO: replace the two image paths above with the real relative paths once the
+     GSoC and EBRAINS branding assets are provided. Do not invent filenames. -->
 
-This handbook helps a team add automated security scanning to their CI
-pipeline and block known CVEs and insecure code before merge, without
-designing the pipeline from scratch. It generalizes a working reference
-implementation into a pattern any repo can adopt.
+# EBRAINS DevSecOps Handbook
 
-It grew out of a GSoC 2026 project applying the OWASP DevSecOps Maturity
-Model to the EBRAINS community, using the MIP platform as a proof of
-concept. The OWASP DevSecOps Guideline sets the general principles; this
-handbook is the concrete, step by step layer underneath it.
+This handbook documents a working reference implementation of an OWASP
+DevSecOps-aligned CI/CD security pipeline, built as a Google Summer of Code
+2026 project for the EBRAINS community, using the **Medical Informatics
+Platform (MIP)** as the proof of concept.
 
-## Who this is for
+## Table of Contents
 
-A team that already runs CI on pull requests and wants a security scanning
-gate, without inventing their own severity policy, suppression workflow, or
-gate logic from first principles.
+- [README.md](README.md) (this file)
+- [ABOUT-OWASP-CONTRIBUTION.md](ABOUT-OWASP-CONTRIBUTION.md)
+- **tutorials/**
+  - [01-setup-guide.md](tutorials/01-setup-guide.md)
+- **how-to/**
+  - [suppress-a-finding.md](how-to/suppress-a-finding.md)
+  - [adjust-severity-gate.md](how-to/adjust-severity-gate.md)
+  - [add-new-scanner.md](how-to/add-new-scanner.md)
+  - [troubleshoot-maven-rate-limit.md](how-to/troubleshoot-maven-rate-limit.md)
+  - [troubleshoot-sbom-generation-errors.md](how-to/troubleshoot-sbom-generation-errors.md)
+- **reference/**
+  - [pipeline-container-scanning.md](reference/pipeline-container-scanning.md)
+  - [pipeline-sca.md](reference/pipeline-sca.md)
+  - [pipeline-sast.md](reference/pipeline-sast.md)
+  - [tool-installation-flags.md](reference/tool-installation-flags.md)
+  - [exit-codes.md](reference/exit-codes.md)
+  - [gate-status-cvss.md](reference/gate-status-cvss.md)
+  - [gate-status-rule-severity.md](reference/gate-status-rule-severity.md)
+- **explanation/**
+  - [why-three-independent-pipelines.md](explanation/why-three-independent-pipelines.md)
+  - [why-cvss-based-gating.md](explanation/why-cvss-based-gating.md)
+  - [why-two-gate-models.md](explanation/why-two-gate-models.md)
+  - [why-these-tools.md](explanation/why-these-tools.md)
+  - [why-two-sca-tools.md](explanation/why-two-sca-tools.md)
+  - [why-sboms.md](explanation/why-sboms.md)
+  - [why-opengrep-not-semgrep.md](explanation/why-opengrep-not-semgrep.md)
+- **case-studies/**
+  - [platform-backend.md](case-studies/platform-backend.md)
 
-## Scope
+## Why this exists
 
-Covered now, following the OWASP DevSecOps model, as three independent
-pipelines:
+Security practices across EBRAINS and the wider Neuroinformatics community
+currently vary from project to project, and in many cases only partially
+meet the requirements of the Cyber Resilience Act (CRA) and NIS2. This
+project starts from a maturity snapshot of MIP's pipelines, assessed against
+the [OWASP DevSecOps Maturity Model (DSOMM)](https://dsomm.owasp.org/), and
+turns that snapshot into an actionable, implemented set of controls, using
+the [OWASP DevSecOps Guideline](https://github.com/OWASP/DevSecOpsGuideline)
+as the implementation reference.
 
-- **Container Scanning**: the built image and the Dockerfile itself, using
-  a CVSS gate (image CVEs) and a rule-severity gate (Dockerfile SAST)
-- **SCA** (Software Composition Analysis): application dependencies via
-  SBOM, CVSS gate
-- **SAST** (Static Application Security Testing): application source code,
-  rule-severity gate
+The outcome is a working reference pipeline that produces security
+artifacts automatically (scan reports, SBOMs, gate decisions), reused across
+three MIP components (`platform-backend`, `platform-ui`, and container
+images), packaged here as a reusable secure-pipeline blueprint.
 
-This handbook does not cover manual security review, penetration testing,
-or runtime protection. It covers what can be automated and gated on a pull
-request.
+## What is actually implemented
 
-## How to use this handbook
+Three independent GitHub Actions pipelines, each following the OWASP
+DevSecOps model, each with its own workflow file, orchestrator script, and
+gate:
 
-Content is organized by what you are trying to do, not by reading order:
+| Pipeline | Scans | Tools |
+|---|---|---|
+| **Container Scanning** | The built Docker image + the Dockerfile itself | Trivy, OSV-Scanner (image CVEs); Hadolint, OpenGrep (Dockerfile SAST) |
+| **SCA** (Software Composition Analysis) | Application dependencies, via a generated SBOM (CycloneDX) | Trivy, OSV-Scanner |
+| **SAST** (Static Application Security Testing) | Application source code | OpenGrep |
 
-- Read a **tutorial** when you want to build something end to end for the
-  first time.
-- Read a **how-to guide** when you already have the pipelines running and
-  need to accomplish one specific task.
-- Read **reference** when you need a fact, a table, or a flag, and nothing
-  else.
-- Read **explanation** when you want to understand why something is built
-  the way it is, not how to do it.
+See [reference/pipeline-container-scanning.md](reference/pipeline-container-scanning.md),
+[reference/pipeline-sca.md](reference/pipeline-sca.md), and
+[reference/pipeline-sast.md](reference/pipeline-sast.md) for the exact
+commands, flags, and files involved in each.
 
-## Table of contents
+### Architecture
 
-1. Tutorial: [tutorials/01-setup-guide.md](tutorials/01-setup-guide.md), stand up all three pipelines in a new repo
-2. How-to guides
-   - [Suppress a false positive](how-to/suppress-a-finding.md)
-   - [Adjust the severity gate](how-to/adjust-severity-gate.md)
-   - [Add a new scanner](how-to/add-new-scanner.md)
-3. Reference
-   - [Tool installation flags](reference/tool-installation-flags.md)
-   - [Exit codes](reference/exit-codes.md)
-   - [Gate status, CVSS model](reference/gate-status-cvss.md)
-   - [Gate status, rule-severity model](reference/gate-status-rule-severity.md)
-4. Explanation
-   - [Why three independent pipelines](explanation/why-three-independent-pipelines.md)
-   - [Why CVSS based gating](explanation/why-cvss-based-gating.md)
-   - [Why two gate models](explanation/why-two-gate-models.md)
-5. Case study: [reference-implementation.md](case-studies/reference-implementation.md), one real, fully instantiated example
+```mermaid
+flowchart LR
+    PR["Pull Request \nworkflow dispatch \nweekly schedule"]
 
-## Status
+    subgraph CS["container-scan.yml"]
+        CS_SAST["SAST half\nHadolint + OpenGrep\n(scans Dockerfile)"]
+        CS_SCA["SCA half\nTrivy + OSV-Scanner\n(scans built image)"]
+    end
 
-Draft. The pattern has been implemented and proven on one repo, see the
-case study. Sections are being generalized and filled in one at a time;
-TODO markers indicate what is not written yet.
+    subgraph SCA["sca.yml"]
+        SCA_SBOM["Generate SBOM\n(CycloneDX)"]
+        SCA_SCAN["Trivy + OSV-Scanner\n(scan the SBOM)"]
+        SCA_SBOM --> SCA_SCAN
+    end
 
-## Related
+    subgraph SAST["sast.yml"]
+        SAST_SCAN["OpenGrep\n(scans source code)"]
+    end
+    
+    SARIF["Downloadable SARIF Artifact\n(30-day retention)"]
+    SEC[("GitHub Security Tab")]
 
-OWASP DevSecOps Guideline, Vulnerability Scanning:
-https://owasp.org/www-project-devsecops-guideline/latest/02-Vulnerability-Scanning
+    PR --> CS
+    PR --> SCA
+    PR --> SAST
+
+    CS_SAST --> SARIF
+    CS_SCA --> SARIF
+    SCA_SCAN --> SARIF
+    SAST_SCAN --> SARIF
+    
+    SARIF --> SEC
+```
+
+All three workflows trigger independently and run in parallel; each
+uploads its own SARIF category to the Security tab, see
+[reference/exit-codes.md](reference/exit-codes.md) for the full category
+list.
+
+## How this handbook is organized
+
+This handbook follows the [Diátaxis](https://diataxis.fr/) framework, the
+same structure used by the official
+[EBRAINS Handbook](https://handbook.ebrains.eu), so that migrating this
+content there later, if that path is chosen, needs minimal rework:
+
+- **tutorials/** - learning-oriented, step by step, works start to finish.
+- **how-to/** - task-oriented, one job per file, assumes a working pipeline.
+- **reference/** - information-oriented, tables and facts, no narrative.
+- **explanation/** - understanding-oriented, the reasoning and tradeoffs
+  behind the design.
+- **case-studies/** - the one place real names, repo links, and
+  project-specific detail are expected.
+
+## Where to start
+
+- New to this and want to set up the tools locally: start with
+  [tutorials/01-setup-guide.md](tutorials/01-setup-guide.md).
+- Already running the pipelines and need to do one specific thing (suppress
+  a finding, add a scanner, adjust a gate): go to [how-to/](how-to/).
+- Want exact commands, flags, exit codes, or gate thresholds: go to
+  [reference/](reference/).
+- Want to understand *why* the pipelines are built this way: go to
+  [explanation/](explanation/).
+- Want the concrete, named story of how this was built against
+  `platform-backend`: read [case-studies/platform-backend.md](case-studies/platform-backend.md).
+
+## Relationship to OWASP
+
+This project has an open pull request against the upstream OWASP
+DevSecOps Guideline. See
+[ABOUT-OWASP-CONTRIBUTION.md](ABOUT-OWASP-CONTRIBUTION.md) for the full
+history and the still-open question of whether this handbook stays tied to
+the OWASP guide or becomes a standalone EBRAINS publication.
