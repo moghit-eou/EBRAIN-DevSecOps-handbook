@@ -11,12 +11,30 @@ DevSecOps-aligned CI/CD security pipeline, built as a Google Summer of Code
 2026 project for the EBRAINS community, using the **Medical Informatics
 Platform (MIP)** as the proof of concept.
 
+
+## Platform and maintenance notes
+
 > **Status: active, in progress.** This handbook documents a Google Summer
 > of Code 2026 project that is still under active development. Content
 > reflects the pipelines as they exist today, not a finished, frozen
 > product. Commands, thresholds, and file layouts may still change before
 > the project ends. Where something is a decision still being discussed
 > rather than a shipped fact, it is marked as such.
+
+- Everything documented here has been built and tested on **Linux x86_64 /
+  Ubuntu**, matching the `ubuntu-latest` GitHub Actions runner image. The
+  install script (`setup-tools.sh`) is not portable as-is to macOS or
+  native Windows. WSL2 works for Windows because it provides a real Linux
+  userspace. There is currently no working path on native macOS.
+- **Dockerizing the toolchain** (packaging the scanners into a container
+  image published to GHCR, so the pipeline runs via `docker run` instead of
+  the install script) is an idea under discussion with the project's docs
+  mentor. It is **not a decided direction**. Do not treat any reference to
+  it in this handbook as a shipped feature.
+- Because the project is still active, some pages contain `TODO:` markers
+  where the source material available at the time of writing did not cover
+  something. Treat those as open gaps, not omissions.
+
 
 ## Table of Contents
 
