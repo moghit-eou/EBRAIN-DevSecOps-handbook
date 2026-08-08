@@ -1,8 +1,6 @@
 ![GSoC logo](TODO-path-to-gsoc-logo.png)
 ![EBRAINS logo](TODO-path-to-ebrains-logo.png)
 
-<!-- TODO: replace the two image paths above with the real relative paths once the
-     GSoC and EBRAINS branding assets are provided. Do not invent filenames. -->
 
 # EBRAINS DevSecOps Handbook
 
@@ -10,6 +8,14 @@ This handbook documents a working reference implementation of an OWASP
 DevSecOps-aligned CI/CD security pipeline, built as a Google Summer of Code
 2026 project for the EBRAINS community, using the **Medical Informatics
 Platform (MIP)** as the proof of concept.
+
+
+> **Status: active, in progress.** This handbook documents a Google Summer
+> of Code 2026 project that is still under active development. Content
+> reflects the pipelines as they exist today, not a finished, frozen
+> product. Commands, thresholds, and file layouts may still change before
+> the project ends. Where something is a decision still being discussed
+> rather than a shipped fact, it is marked as such.
 
 ## Table of Contents
 
