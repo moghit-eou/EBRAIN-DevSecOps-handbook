@@ -16,7 +16,6 @@ for current compatibility details.
 
 * A Linux x86_64 environment (native Ubuntu or WSL2).
 * `bash`, `curl`, `sudo`, `git`.
-* Python 3.14.x.
 * Docker (for the Container Scanning pipeline).
 * Either Maven (for a Maven/Java project) or Node.js and npm (for an
 npm/JavaScript project), matching your project's ecosystem.
