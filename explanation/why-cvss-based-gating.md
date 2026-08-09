@@ -1,4 +1,4 @@
-# Why CVSS-Based Gating for SCA Tools, and a Custom SARIF Parser
+# Why CVSS-Based Gating for SCA, and a Custom SARIF Parser
 
 ## The core problem
 
