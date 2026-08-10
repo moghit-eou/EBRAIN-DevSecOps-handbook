@@ -1,8 +1,8 @@
-![Google Summer of Code 2026 Banner](https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/GSoC_logo.svg/500px-GSoC_logo.svg.png)
-![MIP](https://mip.ebrains.eu/img/mip-logo-short-compact.png)
-![EBRains](https://www.flagera.eu/wp-content/uploads/2021/06/ebrains_logo_black.png__400x148_q85_crop_subsampling-2-300x111.png)
-
- 
+<p align="center">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/GSoC_logo.svg/500px-GSoC_logo.svg.png" height="100">
+  <img src="https://mip.ebrains.eu/img/mip-logo-short-compact.png" height="80">
+  <img src="https://www.flagera.eu/wp-content/uploads/2021/06/ebrains_logo_black.png__400x148_q85_crop_subsampling-2-300x111.png" height="80">
+</p>
 
 # EBRAINS DevSecOps Handbook
 
