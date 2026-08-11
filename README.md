@@ -106,7 +106,7 @@ commands, flags, and files involved in each.
 flowchart LR
     PR["Pull Request \nworkflow dispatch \nweekly schedule"]
 
-    subgraph CS["container-scan.yml"]
+    subgraph CS["container scanning"]
         CS_SAST["SAST half\nHadolint + OpenGrep\n(scans Dockerfile)"]
         CS_SCA["SCA half\nTrivy + OSV-Scanner\n(scans built image)"]
     end
