@@ -4,6 +4,14 @@ This is the single most important design decision behind the SCA pipeline,
 and the one with the most concrete evidence behind it. This page is the
 canonical explanation; other pages link here instead of repeating it.
 
+## What an SBOM is, briefly
+
+An SBOM is a list of every software component and dependency in a
+project, the equivalent of an ingredients list for software.
+[CycloneDX](https://cyclonedx.org/) is the standard format used here, a
+structured schema (JSON in this setup) for representing that inventory
+consistently so tools like Trivy and OSV-Scanner can parse it reliably.
+
 ## The problem: scanning `~/.m2` directly produced 300+ false positives
 
 Early local testing against `platform-backend` (a Maven, Spring Boot
@@ -102,11 +110,3 @@ registry-side rate limiting (HTTP 429), which fails the tool run entirely,
 not just the scan quality. Scanning a pre-generated SBOM avoids this class
 of failure for the scan step itself. See
 [troubleshoot-maven-rate-limit.md](../how-to/troubleshoot-maven-rate-limit.md).
-
-## What an SBOM is, briefly
-
-An SBOM is a list of every software component and dependency in a
-project, the equivalent of an ingredients list for software.
-[CycloneDX](https://cyclonedx.org/) is the standard format used here, a
-structured schema (JSON in this setup) for representing that inventory
-consistently so tools like Trivy and OSV-Scanner can parse it reliably.
