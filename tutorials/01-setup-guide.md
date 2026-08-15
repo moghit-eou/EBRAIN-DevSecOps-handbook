@@ -7,6 +7,15 @@ your own machine, start to finish. It uses a generic placeholder
 every supported ecosystem, not just Maven and npm, so it applies to any
 repository set up the same way.
 
+> Maven and npm are shown first below only because they're the two
+> ecosystems the reference implementations (`platform-backend`,
+> `platform-ui`) actually run, so they're the two commands verified against
+> a live repository. Gradle, Python, Go, and Rust are documented right
+> alongside them, and if your project uses something else entirely, the
+> pipeline isn't limited to any fixed list, see
+> [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md#adding-a-new-ecosystem-not-in-the-matrix)
+> for how to add it.
+
 **Platform requirement:** this tutorial has only been verified on Linux
 x86_64 (Ubuntu), matching the `ubuntu-latest` GitHub Actions runner. On
 Windows, use WSL2. There is currently no working path on native macOS.
@@ -18,8 +27,8 @@ for current platform compatibility details.
 * A Linux x86_64 environment (native Ubuntu or WSL2).
 * `bash`, `curl`, `sudo`, `git`.
 * Docker (for the Container Scanning pipeline).
-* Your project's own build tool: Maven, Gradle, npm, pip, or Go, matching
-  whichever ecosystem your project actually uses.
+* Your project's own build tool: Maven, Gradle, npm, pip, Go, Cargo, or
+  whatever your ecosystem actually uses.
 * The `ci/` scripts from your repository: `setup-tools.sh`,
   `container_scan.py`, `sca_scan.py`, `sast_scan.py`, `parse_sarif.py`.
 
@@ -91,6 +100,20 @@ go mod download
 bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem go
 python ci/sca_scan.py
 ```
+
+**Rust:**
+```bash
+cargo fetch --locked
+bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem rust
+python ci/sca_scan.py
+```
+
+**Anything else** (PHP, Ruby, .NET, or a language not listed above): the
+same three-line shape applies, install/resolve dependencies, run
+`setup-tools.sh` with your ecosystem name, run `sca_scan.py`. See
+[integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md#adding-a-new-ecosystem-not-in-the-matrix)
+to add the one missing piece: a `setup-tools.sh` branch that produces a
+CycloneDX SBOM for your ecosystem.
 
 For npm specifically, use `npm ci`, not `npm install`, before generating
 the SBOM: `npm ci` installs strictly from `package-lock.json`, wipes
@@ -180,7 +203,7 @@ see [gate-status-cvss.md](../reference/gate-status-cvss.md) and
 ## Next steps
 
 * Setting up a repository whose ecosystem isn't Maven, Gradle, npm,
-  Python, or Go: see
+  Python, Go, or Rust: see
   [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md).
 * If a finding is a false positive, see
   [suppress-a-finding.md](../how-to/suppress-a-finding.md).

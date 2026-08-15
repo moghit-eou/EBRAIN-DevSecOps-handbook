@@ -41,7 +41,7 @@ depends on a specific CI provider or a specific build ecosystem. See
 - **tutorials/**
   - [01-setup-guide.md](tutorials/01-setup-guide.md)
 - **how-to/**
-  - [integrate-a-new-ecosystem.md](how-to/integrate-a-new-ecosystem.md) — the universal, per-ecosystem integration matrix (Maven, Gradle, npm, raw JavaScript, Python, Go)
+  - [integrate-a-new-ecosystem.md](how-to/integrate-a-new-ecosystem.md) — the universal, per-ecosystem integration matrix (Maven, Gradle, npm, raw JavaScript, Python, Go, Rust, and how to add any ecosystem not yet listed)
   - [suppress-a-finding.md](how-to/suppress-a-finding.md)
   - [adjust-severity-gate.md](how-to/adjust-severity-gate.md)
   - [add-new-scanner.md](how-to/add-new-scanner.md)
@@ -130,8 +130,11 @@ content there later, if that path is chosen, needs minimal rework:
 - New to this and want to set up the tools locally: start with
   [tutorials/01-setup-guide.md](tutorials/01-setup-guide.md).
 - Onboarding a repository that isn't Maven or npm (Gradle, raw JavaScript,
-  Python, Go): go straight to
+  Python, Go, Rust, or an ecosystem not documented yet at all): go straight
+  to
   [how-to/integrate-a-new-ecosystem.md](how-to/integrate-a-new-ecosystem.md).
+  Maven and npm are the two ecosystems the reference implementations
+  actually run; they are not a limitation of the pipeline itself.
 - Already running the pipelines and need to do one specific thing (suppress
   a finding, add a scanner, adjust a gate): go to [how-to/](how-to/).
 - Want exact commands, flags, exit codes, or gate thresholds: go to

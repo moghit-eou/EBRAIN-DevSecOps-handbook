@@ -8,7 +8,7 @@
 | Scans | Application dependencies, via a generated SBOM, not the source code and not a container image |
 | Tools | Trivy, OSV-Scanner |
 | Gate model | CVSS-score gate (see [gate-status-cvss.md](gate-status-cvss.md)) |
-| Supported ecosystems | Maven, Gradle, npm, raw JavaScript, Python, Go, see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md) |
+| Supported ecosystems | Maven, Gradle, npm, raw JavaScript, Python, Go, Rust — plus any ecosystem you add yourself, see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md) |
 
 ## Execution order
 
@@ -75,6 +75,28 @@ bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <ecosys
 python ci/sca_scan.py
 ```
 
+## Workflow steps
+
+Every `sca.yml`, regardless of ecosystem, is the same seven steps in the
+same order. Only step 3 (dependency cache) and step 4 (install/resolve)
+change per ecosystem, see the
+[ecosystem matrix](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix)
+for the exact substitution:
+
+| # | Step | Ecosystem-specific? | Notes |
+|---|---|---|---|
+| 1 | `actions/checkout` | No | Standard checkout |
+| 2 | `actions/setup-python` | No | `parse_sarif.py` and the orchestrators are Python; this is required even for a non-Python project being scanned |
+| 3 | `actions/cache` (restore dependency store) | **Yes** | Path + key vary per ecosystem, see [Caching](#caching) below |
+| 4 | Install / resolve dependencies | **Yes** | `mvn dependency:resolve -q`, `npm ci`, `pip install -r requirements.txt`, `go mod download`, or the equivalent for your ecosystem |
+| 5 | `setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <ecosystem>` | No (parameterized) | Installs the two SCA binaries and generates `target/bom.json` |
+| 6 | `python ci/sca_scan.py` | No | Runs both tools against the SBOM, applies the CVSS-score gate |
+| 7 | `upload-sarif` (x2) + `upload-artifact` | No | One category per tool, plus the merged artifact |
+
+Because only steps 3 and 4 differ, onboarding a new ecosystem to this
+pipeline is a two-step change to the workflow file, not a rewrite, see
+[integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md).
+
 ## Caching
 
 Cache path and key are the one piece of the pipeline that must match the
@@ -88,5 +110,126 @@ correctness bug, not just a performance one, since the cached artifacts
 would then be reused across builds that should have resolved different
 versions.
 
+A minimal reference `actions/cache` step, the shape shared by every
+ecosystem:
+
+```yaml
+- name: Cache dependencies
+  uses: actions/cache@v6
+  with:
+    path: <ecosystem-specific store, e.g. ~/.m2/repository, ~/.npm, ~/go/pkg/mod>
+    key: ${{ runner.os }}-<ecosystem>-v1-${{ hashFiles('<lockfile glob>') }}
+    restore-keys: ${{ runner.os }}-<ecosystem>-v1-
+```
+
+Three things to keep consistent whichever ecosystem you're adding:
+
+- **Version the key** (the `-v1-` segment). Bump it if you ever change what
+  the cache stores, otherwise old and new caches can collide under the same
+  key.
+- **Scope the path narrowly.** Cache the package manager's own store
+  (`~/.m2/repository`, not all of `~/.m2`; `~/.npm`, not `node_modules/`)
+  to avoid caching stale build output or risking cache corruption.
+- **Always set `restore-keys`** without the hash suffix, so a cache miss on
+  an exact lockfile match still restores the closest previous cache instead
+  of starting from nothing, keeping incremental installs fast even when the
+  lockfile just changed.
+
 See also: [why-sboms.md](../explanation/why-sboms.md),
 [why-two-sca-tools.md](../explanation/why-two-sca-tools.md).
+
+## Generic GitHub Actions template
+
+This is the full `sca.yml` shape with the ecosystem-specific block called
+out. Swap in the matching block from the
+[ecosystem matrix](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix)
+(Maven, Gradle, npm, raw JavaScript, Python, Go, or an ecosystem you've
+added yourself, see
+[Adding a new ecosystem](../how-to/integrate-a-new-ecosystem.md#adding-a-new-ecosystem-not-in-the-matrix)):
+everything else in the file is identical regardless of language.
+
+```yaml
+name: Software Composition Analysis (SCA)
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 1'
+
+jobs:
+  sca:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      SBOM_PATH: target/bom.json
+      TRIVY_IGNOREFILE: ci/suppress_trivy.yaml
+      OSV_IGNOREFILE: ci/suppress_osv_scanner.toml
+      TRIVY_SARIF_OUTPUT: trivy-<service>.sarif
+      OSV_SARIF_OUTPUT: osv-scanner-<service>.sarif
+      SCA_MERGED_SARIF_OUTPUT: SCA-<service>-merged.sarif
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.4'
+
+      # --- replace this block with the matching ecosystem block from the ecosystem matrix ---
+      - name: Cache dependencies
+        uses: actions/cache@v6
+        with:
+          path: <ecosystem cache path>
+          key: ${{ runner.os }}-<ecosystem>-v1-${{ hashFiles('<lockfile glob>') }}
+          restore-keys: ${{ runner.os }}-<ecosystem>-v1-
+
+      - name: Install / resolve dependencies
+        run: <ecosystem install command>
+      # ----------------------------------------------------------------------------------------
+
+      - name: Setup tools
+        run: bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <ecosystem>
+
+      - name: Run SCA tools
+        run: python ci/sca_scan.py
+
+      - uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: ${{ env.TRIVY_SARIF_OUTPUT }}
+          category: trivy-app
+
+      - uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: ${{ env.OSV_SARIF_OUTPUT }}
+          category: osv-scanner-app
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sca-scan-sarif-report
+          path: ${{ env.SCA_MERGED_SARIF_OUTPUT }}
+          retention-days: 30
+```
+
+> **Note on Action versions:** the reference implementations pin every
+> `uses:` to a full commit SHA (with a version comment), not a floating tag
+> like `@v7`. The `@v7`-style tags above are for readability in this
+> template only; pin to a SHA before using this in a real workflow. See
+> [platform-ui.md](../case-studies/platform-ui.md) and
+> [platform-backend.md](../case-studies/platform-backend.md) for real,
+> SHA-pinned examples.
+>
+> **Not limited to the ecosystems listed above.** Maven, Gradle, npm, raw
+> JavaScript, Python, and Go are the ecosystems this project has actually
+> tested against; they are worked examples of the pattern, not a fixed
+> list. Any ecosystem with a CycloneDX SBOM generator (Rust/Cargo,
+> PHP/Composer, Ruby/Bundler, and .NET/NuGet all have one, check the
+> [CycloneDX tool center](https://cyclonedx.org/tool-center/) before
+> writing a custom generator) can be plugged into this same template by
+> swapping the cache step, the install command, and the
+> `--sbom-ecosystem` value, see
+> [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md).
