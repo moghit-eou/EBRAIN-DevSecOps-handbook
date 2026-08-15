@@ -102,6 +102,8 @@ commands, flags, and files involved in each.
 
 ### Architecture
 
+Todo : I think this mermaid charts should be moved somewhere else 
+
 ```mermaid
 flowchart LR
     PR["Pull Request \nworkflow dispatch \nweekly schedule"]

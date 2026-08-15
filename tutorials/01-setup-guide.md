@@ -163,3 +163,5 @@ see [gate-status-cvss.md](https://www.google.com/search?q=../reference/gate-stat
 [troubleshoot-maven-rate-limit.md](https://www.google.com/search?q=../how-to/troubleshoot-maven-rate-limit.md).
 * If SBOM generation itself fails, see
 [troubleshoot-sbom-generation-errors.md](https://www.google.com/search?q=../how-to/troubleshoot-sbom-generation-errors.md).
+
+Todo : also i should i how to setup for different projects not just maven and npm , but it could be gradel , pythong or something else , I need to showcase how to setup these stuff for every project 

@@ -1,5 +1,8 @@
 # Case Study: `platform-backend`
 
+Todo : Things feel redundant , case-studies should be for platform-ui and platform-backend 
+
+
 `platform-backend` (Medical Informatics Platform org on GitHub) is the
 reference implementation this whole handbook is built against, a Maven,
 Spring Boot service. This case study walks through the concrete, named
