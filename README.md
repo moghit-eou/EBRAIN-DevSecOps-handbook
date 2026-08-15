@@ -11,6 +11,14 @@ DevSecOps-aligned CI/CD security pipeline, built as a Google Summer of Code
 2026 project for the EBRAINS community, using the **Medical Informatics
 Platform (MIP)** as the proof of concept.
 
+The pipelines themselves are **vendor-neutral by design**: the same
+orchestrators, gates, and GitHub Actions wiring work against any language
+ecosystem, only a small, explicitly documented set of steps (SBOM
+generation, dependency caching) change per ecosystem. See
+[explanation/why-vendor-neutral-pipelines.md](explanation/why-vendor-neutral-pipelines.md)
+for the consolidation this restructure carried out, and
+[reference/ecosystem-matrix.md](reference/ecosystem-matrix.md) for the
+current Maven / Gradle / npm / raw JavaScript / Python support matrix.
 
 ## Platform and maintenance notes
 
@@ -34,14 +42,19 @@ Platform (MIP)** as the proof of concept.
 - Because the project is still active, some pages contain `TODO:` markers
   where the source material available at the time of writing did not cover
   something. Treat those as open gaps, not omissions.
-
+- **Gradle and Python SBOM generation are documented but not yet wired into
+  `setup-tools.sh`** (no `--sbom-ecosystem gradle`/`python` case exists
+  yet). Raw JavaScript with no package manager has no SBOM path at all,
+  by nature, not as a gap to close. See
+  [reference/ecosystem-matrix.md](reference/ecosystem-matrix.md) for exact
+  status per ecosystem before assuming a command below is CI-automated.
 
 ## Table of Contents
 
 - [README.md](README.md) (this file)
 - [ABOUT-OWASP-CONTRIBUTION.md](ABOUT-OWASP-CONTRIBUTION.md)
 - **tutorials/**
-  - [01-setup-guide.md](tutorials/01-setup-guide.md)
+  - [01-integrate-your-repository.md](tutorials/01-integrate-your-repository.md)
 - **how-to/**
   - [suppress-a-finding.md](how-to/suppress-a-finding.md)
   - [adjust-severity-gate.md](how-to/adjust-severity-gate.md)
@@ -49,6 +62,7 @@ Platform (MIP)** as the proof of concept.
   - [troubleshoot-maven-rate-limit.md](how-to/troubleshoot-maven-rate-limit.md)
   - [troubleshoot-sbom-generation-errors.md](how-to/troubleshoot-sbom-generation-errors.md)
 - **reference/**
+  - [ecosystem-matrix.md](reference/ecosystem-matrix.md) — Maven / Gradle / npm / raw JS / Python build, SBOM, and cache commands, in one place
   - [pipeline-container-scanning.md](reference/pipeline-container-scanning.md)
   - [pipeline-sca.md](reference/pipeline-sca.md)
   - [pipeline-sast.md](reference/pipeline-sast.md)
@@ -57,6 +71,7 @@ Platform (MIP)** as the proof of concept.
   - [gate-status-cvss.md](reference/gate-status-cvss.md)
   - [gate-status-rule-severity.md](reference/gate-status-rule-severity.md)
 - **explanation/**
+  - [why-vendor-neutral-pipelines.md](explanation/why-vendor-neutral-pipelines.md) — why the Maven/npm docs were consolidated into one ecosystem-agnostic guide
   - [why-three-independent-pipelines.md](explanation/why-three-independent-pipelines.md)
   - [why-cvss-based-gating.md](explanation/why-cvss-based-gating.md)
   - [why-two-gate-models.md](explanation/why-two-gate-models.md)
@@ -66,6 +81,8 @@ Platform (MIP)** as the proof of concept.
   - [why-opengrep-not-semgrep.md](explanation/why-opengrep-not-semgrep.md)
 - **case-studies/**
   - [platform-backend.md](case-studies/platform-backend.md)
+  - [platform-ui.md](case-studies/platform-ui.md)
+  - [reference-implementation.md](case-studies/reference-implementation.md)
 
 ## Why this exists
 
@@ -81,7 +98,10 @@ as the implementation reference.
 The outcome is a working reference pipeline that produces security
 artifacts automatically (scan reports, SBOMs, gate decisions), reused across
 three MIP components (`platform-backend`, `platform-ui`, and container
-images), packaged here as a reusable secure-pipeline blueprint.
+images), packaged here as a reusable, **vendor-neutral** secure-pipeline
+blueprint, one that documents Maven and npm today and extends to any other
+ecosystem through [reference/ecosystem-matrix.md](reference/ecosystem-matrix.md)
+rather than a new copy of the whole guide per language.
 
 ## What is actually implemented
 
@@ -98,11 +118,13 @@ gate:
 See [reference/pipeline-container-scanning.md](reference/pipeline-container-scanning.md),
 [reference/pipeline-sca.md](reference/pipeline-sca.md), and
 [reference/pipeline-sast.md](reference/pipeline-sast.md) for the exact
-commands, flags, and files involved in each.
+commands, flags, and files involved in each. Container Scanning and SAST
+are already fully ecosystem-agnostic; SCA's ecosystem-specific step is
+isolated to [reference/ecosystem-matrix.md](reference/ecosystem-matrix.md).
 
 ### Architecture
 
-Todo : I think this mermaid charts should be moved somewhere else 
+Todo : I think this mermaid charts should be moved somewhere else
 
 ```mermaid
 flowchart LR
@@ -114,7 +136,7 @@ flowchart LR
     end
 
     subgraph SCA["sca.yml"]
-        SCA_SBOM["Generate SBOM\n(CycloneDX)"]
+        SCA_SBOM["Generate SBOM\n(CycloneDX, per ecosystem-matrix.md)"]
         SCA_SCAN["Trivy + OSV-Scanner\n(scan the SBOM)"]
         SCA_SBOM --> SCA_SCAN
     end
@@ -153,6 +175,8 @@ content there later, if that path is chosen, needs minimal rework:
 - **tutorials/** - learning-oriented, step by step, works start to finish.
 - **how-to/** - task-oriented, one job per file, assumes a working pipeline.
 - **reference/** - information-oriented, tables and facts, no narrative.
+  This is also where the consolidated ecosystem matrix lives, it's a
+  lookup table, not a tutorial.
 - **explanation/** - understanding-oriented, the reasoning and tradeoffs
   behind the design.
 - **case-studies/** - the one place real names, repo links, and
@@ -160,16 +184,24 @@ content there later, if that path is chosen, needs minimal rework:
 
 ## Where to start
 
-- New to this and want to set up the tools locally: start with
-  [tutorials/01-setup-guide.md](tutorials/01-setup-guide.md).
+- New to this and want to integrate the pipelines into a repository: start
+  with [tutorials/01-integrate-your-repository.md](tutorials/01-integrate-your-repository.md).
+  It's ecosystem-agnostic; it points at
+  [reference/ecosystem-matrix.md](reference/ecosystem-matrix.md) for the
+  one step that varies by language.
 - Already running the pipelines and need to do one specific thing (suppress
   a finding, add a scanner, adjust a gate): go to [how-to/](how-to/).
-- Want exact commands, flags, exit codes, or gate thresholds: go to
-  [reference/](reference/).
-- Want to understand *why* the pipelines are built this way: go to
+- Want exact commands, flags, exit codes, gate thresholds, or per-ecosystem
+  SBOM/cache commands: go to [reference/](reference/), start with
+  [ecosystem-matrix.md](reference/ecosystem-matrix.md) if you're onboarding
+  a new language.
+- Want to understand *why* the pipelines are built this way, including why
+  they were consolidated into a single vendor-neutral guide: go to
   [explanation/](explanation/).
 - Want the concrete, named story of how this was built against
-  `platform-backend`: read [case-studies/platform-backend.md](case-studies/platform-backend.md).
+  `platform-backend` (Maven) and `platform-ui` (npm): read
+  [case-studies/platform-backend.md](case-studies/platform-backend.md) and
+  [case-studies/platform-ui.md](case-studies/platform-ui.md).
 
 ## Relationship to OWASP
 

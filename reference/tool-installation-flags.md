@@ -89,3 +89,13 @@ downstream error.
 
 `container-scan.yml` scans the built image directly and needs no SBOM, so
 it always uses `--sbom-ecosystem none` (or omits the flag).
+
+Only `maven`, `npm`, and `none` are implemented in the shipped script today.
+Gradle and Python SBOM generation are documented but not yet wired in as
+`--sbom-ecosystem` values, run their commands directly instead of through
+this flag until that lands. Raw JavaScript with no package manager has no
+SBOM path at all, regardless of whether this flag is extended. See
+[ecosystem-matrix.md](ecosystem-matrix.md) for the full picture, per-ecosystem
+commands, caveats, and the proposed `case` block for closing this gap, and
+[explanation/why-vendor-neutral-pipelines.md](../explanation/why-vendor-neutral-pipelines.md)
+for why this consolidation happened.

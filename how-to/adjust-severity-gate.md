@@ -69,3 +69,4 @@ Change `--failure-threshold error` to a different Hadolint threshold
 See
 [reference/gate-status-rule-severity.md](../reference/gate-status-rule-severity.md)
 for what the current defaults mean.
+

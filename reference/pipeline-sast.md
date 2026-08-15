@@ -50,6 +50,19 @@ still recorded and visible, without being able to block the build.
 | `platform-backend` (Java) | `semgrep-rules/generic semgrep-rules/problem-based-packs semgrep-rules/bash semgrep-rules/java auto semgrep-rules/yaml semgrep-rules/package_managers p/default` |
 | `platform-ui` (Angular/npm) | `semgrep-rules/generic semgrep-rules/problem-based-packs semgrep-rules/bash semgrep-rules/javascript semgrep-rules/yaml semgrep-rules/package_managers p/default semgrep-rules/json` |
 
+Extending this to a new ecosystem doesn't require any change to
+`sast_scan.py` itself, only a new row here: swap in the matching
+`semgrep-rules/<lang>` pack (for example, `semgrep-rules/python` or
+`semgrep-rules/gradle` where applicable) alongside the shared,
+language-agnostic packs (`generic`, `problem-based-packs`, `bash`, `yaml`,
+`package_managers`, `p/default`) every existing row already includes. SAST
+was ecosystem-agnostic before the SCA-side consolidation in
+[ecosystem-matrix.md](ecosystem-matrix.md), this table is the one place
+that stays per-repository rather than folding into that matrix, since a
+ruleset choice is a per-project noise/coverage tradeoff (see
+[why-opengrep-not-semgrep.md](../explanation/why-opengrep-not-semgrep.md)),
+not a mechanical ecosystem lookup like a build command.
+
 ### Exclude patterns by repository
 
 | Repository | `OPENGREP_EXCLUDE` |

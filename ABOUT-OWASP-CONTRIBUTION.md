@@ -29,3 +29,4 @@ opened, based directly on lessons learned while building these pipelines:
   scanning, and normalizing gate checks across scanners so that tools
   reporting CVSS and tools reporting rule severity are handled
   consistently.
+

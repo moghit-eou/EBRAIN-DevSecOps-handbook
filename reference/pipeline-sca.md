@@ -9,19 +9,21 @@
 | Tools | Trivy, OSV-Scanner |
 | Gate model | CVSS-score gate (see [gate-status-cvss.md](gate-status-cvss.md)) |
 
+Everything on this page, the orchestrator, the two tools, the gate, is
+identical regardless of ecosystem. The only ecosystem-specific piece is the
+"Ecosystem?" branch below, which resolves dependencies, caches the right
+directory, and generates the SBOM differently per language. See
+[ecosystem-matrix.md](ecosystem-matrix.md) for the full, current set of
+supported ecosystems (Maven, npm shipped; Gradle, Python documented;
+raw JavaScript has no SBOM path), that page is the single place this
+branch is documented, not repeated here.
+
 ## Execution order
 
 ```mermaid
 flowchart TD
-    A["Checkout + Setup Python"] --> B{"Ecosystem?"}
-    B -->|Maven| C1["Cache ~/.m2/repository"]
-    C1 --> C2["mvn dependency:resolve -q"]
-    C2 --> C3["setup-tools.sh --sbom-ecosystem maven\n(mvn cyclonedx-maven-plugin -> target/bom.json)"]
-    B -->|npm| D1["Cache ~/.npm"]
-    D1 --> D2["npm ci"]
-    D2 --> D3["setup-tools.sh --sbom-ecosystem npm\n(cyclonedx-npm -> target/bom.json)"]
-    C3 --> E["sca_scan.py"]
-    D3 --> E
+    A["Checkout + Setup Python"] --> B{"Ecosystem?\n(see ecosystem-matrix.md)"}
+    B -->|"resolve + cache + SBOM,\nper ecosystem-matrix.md"| E["sca_scan.py"]
     E --> F["run_trivy(): trivy sbom target/bom.json"]
     E --> G["run_osv_scanner(): osv-scanner scan source --lockfile target/bom.json"]
     F --> H["parse_sarif.evaluate()\nCVSS-score gate"]
@@ -53,27 +55,35 @@ trivy sbom "$SBOM_PATH" --format sarif --ignorefile "$TRIVY_IGNOREFILE" --output
 osv-scanner scan source --lockfile "$SBOM_PATH" --config "$OSV_IGNOREFILE" --format sarif --output-file "$OSV_SARIF_OUTPUT"
 ```
 
-Note the OSV-Scanner orchestration detail: OSV-Scanner returns exit code
-`1` whenever it finds any vulnerability at all, regardless of severity.
-`run_osv_scanner()` treats that specific exit code as non-fatal and
-remaps it to `0`, so the pipeline continues to the SARIF-based gate
-evaluation instead of failing immediately on any finding. The actual
-pass/fail decision comes from `parse_sarif.evaluate()` afterward, not from
-OSV-Scanner's own exit code.
+Both commands are the same regardless of ecosystem, they operate on
+`target/bom.json`, whatever generated it. Note the OSV-Scanner
+orchestration detail: OSV-Scanner returns exit code `1` whenever it finds
+any vulnerability at all, regardless of severity. `run_osv_scanner()`
+treats that specific exit code as non-fatal and remaps it to `0`, so the
+pipeline continues to the SARIF-based gate evaluation instead of failing
+immediately on any finding. The actual pass/fail decision comes from
+`parse_sarif.evaluate()` afterward, not from OSV-Scanner's own exit code.
 
 ## Running it locally
 
-**Maven:**
+Look up your ecosystem's resolve and SBOM-generation commands in
+[ecosystem-matrix.md](ecosystem-matrix.md), then run:
 
 ```bash
-mvn dependency:resolve -q
-bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem maven
+<resolve-dependencies-command>                                                     # from the matrix
+bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <value>   # <value> from the matrix
 python ci/sca_scan.py
 ```
 
-**npm:**
+For example, for the two shipped ecosystems:
 
 ```bash
+# Maven
+mvn dependency:resolve -q
+bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem maven
+python ci/sca_scan.py
+
+# npm
 npm ci
 bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem npm
 python ci/sca_scan.py
@@ -81,16 +91,16 @@ python ci/sca_scan.py
 
 ## Caching
 
-| Ecosystem | Cache path | Cache key |
-|---|---|---|
-| Maven | `~/.m2/repository` | `${{ runner.os }}-m2-v1-${{ hashFiles('**/pom.xml') }}` |
-| npm | `~/.npm` | `${{ runner.os }}-npm-v1-${{ hashFiles('**/package-lock.json') }}` |
-
-The npm cache key must be derived from `package-lock.json`, not
-`package.json`. Hashing the wrong file could give two different resolved
-dependency trees the same cache key, a correctness bug, not just a
-performance one, since the cached tarballs would then be reused across
-builds that should have installed different versions.
+Cache paths and keys are ecosystem-specific and documented per-ecosystem in
+[ecosystem-matrix.md](ecosystem-matrix.md), not repeated here. The one
+correctness rule that applies across every ecosystem: **the cache key must
+be derived from the lockfile, not the manifest** (`package-lock.json`, not
+`package.json`; `poetry.lock`, not `pyproject.toml` alone). Hashing the
+wrong file can give two different resolved dependency trees the same cache
+key, a correctness bug, not just a performance one, since the cached
+artifacts would then be reused across builds that should have installed
+different versions.
 
 See also: [why-sboms.md](../explanation/why-sboms.md),
-[why-two-sca-tools.md](../explanation/why-two-sca-tools.md).
+[why-two-sca-tools.md](../explanation/why-two-sca-tools.md),
+[ecosystem-matrix.md](ecosystem-matrix.md).

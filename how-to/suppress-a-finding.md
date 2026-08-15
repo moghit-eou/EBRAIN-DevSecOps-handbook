@@ -60,3 +60,4 @@ reason = "Low severity DoS in a dev-only tool, not present in production build. 
 Only use the accepted-risk pattern for LOW/MEDIUM severity findings with
 limited impact. Full reference:
 [OSV-Scanner: ignore vulnerabilities by ID](https://google.github.io/osv-scanner/configuration/#ignore-vulnerabilities-by-id).
+

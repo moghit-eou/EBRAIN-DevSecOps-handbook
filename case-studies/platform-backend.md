@@ -1,7 +1,12 @@
 # Case Study: `platform-backend`
 
-Todo : Things feel redundant , case-studies should be for platform-ui and platform-backend 
+Todo : Things feel redundant , case-studies should be for platform-ui and platform-backend
 
+> **Resolved as of this restructure:** the npm-side story previously
+> embedded in this file has been split out to
+> [case-studies/platform-ui.md](platform-ui.md), see that file for the
+> `jQuery-QueryBuilder` malware-flag/PURL-collision investigation. This
+> file now covers `platform-backend` only, per the note above.
 
 `platform-backend` (Medical Informatics Platform org on GitHub) is the
 reference implementation this whole handbook is built against, a Maven,
@@ -63,31 +68,11 @@ CI step ahead of SBOM generation, see
 [reference/pipeline-sca.md](../reference/pipeline-sca.md), rather than
 letting Trivy resolve artifacts on demand during the scan itself.
 
-## `platform-ui`'s companion story: the malware false positive
-
-While `platform-backend` surfaced the Maven false-positive problem,
-`platform-ui`'s npm-based testing surfaced a different, unrelated false
-positive worth recording here since it shaped the case for running
-multiple tools (see
-[explanation/why-two-sca-tools.md](../explanation/why-two-sca-tools.md)):
-Dependency-Track flagged a malware finding (`MAL-2022-4051`) against
-`platform-ui`'s legitimate dependency `jQuery-QueryBuilder`. The cause was
-a PURL collision: `cyclonedx-npm` lowercases all package names when
-generating the SBOM, producing `pkg:npm/jquery-querybuilder@3.0.0`. A
-real, unrelated malicious package is registered on npm under that same
-lowercase name, `jquery-querybuilder`. Because npm's own registry is
-case-insensitive, both the legitimate `jQuery-QueryBuilder` and the
-malicious `jquery-querybuilder` collapse into the same PURL once
-lowercased, and Dependency-Track (which relies on the PURL as its lookup
-key against OSV) couldn't tell them apart. Notably, this same malware flag
-was **not** caught by `npm audit`, only by Dependency-Track via OSV,
-concrete evidence for why relying on a single tool and a single database
-leaves gaps.
-
 ## What this shaped in the final pipeline
 
 - SCA scans the generated SBOM (`target/bom.json`), not the raw
-  dependency cache, for both Maven and npm.
+  dependency cache, for both Maven and npm, and for every ecosystem added
+  since, see [reference/ecosystem-matrix.md](../reference/ecosystem-matrix.md).
 - `mvn dependency:resolve -q` runs as an explicit, separate CI step before
   SBOM generation.
 - Both Trivy and OSV-Scanner run against the SBOM, gated through the
@@ -99,4 +84,5 @@ leaves gaps.
 See [reference/pipeline-sca.md](../reference/pipeline-sca.md) for the
 resulting workflow, and
 [explanation/why-sboms.md](../explanation/why-sboms.md) for the general
-explanation this case study is the evidence for.
+explanation this case study is the evidence for. For the npm-side companion
+investigation, see [case-studies/platform-ui.md](platform-ui.md).
