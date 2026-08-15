@@ -81,17 +81,20 @@ Every `sca.yml`, regardless of ecosystem, is the same seven steps in the
 same order. Only step 3 (dependency cache) and step 4 (install/resolve)
 change per ecosystem, see the
 [ecosystem matrix](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix)
-for the exact substitution:
+for the exact substitution. The steps are described in vendor-neutral
+terms; the
+[generic GitHub Actions template](#generic-github-actions-template) below
+is one concrete implementation of them:
 
 | # | Step | Ecosystem-specific? | Notes |
 |---|---|---|---|
-| 1 | `actions/checkout` | No | Standard checkout |
-| 2 | `actions/setup-python` | No | `parse_sarif.py` and the orchestrators are Python; this is required even for a non-Python project being scanned |
-| 3 | `actions/cache` (restore dependency store) | **Yes** | Path + key vary per ecosystem, see [Caching](#caching) below |
+| 1 | Check out the repository | No | Standard source checkout |
+| 2 | Set up a Python runtime | No | `parse_sarif.py` and the orchestrators are Python; this is required even for a non-Python project being scanned |
+| 3 | Restore the cached dependency store | **Yes** | Path + key vary per ecosystem, see [Caching](#caching) below |
 | 4 | Install / resolve dependencies | **Yes** | `mvn dependency:resolve -q`, `npm ci`, `pip install -r requirements.txt`, `go mod download`, or the equivalent for your ecosystem |
-| 5 | `setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <ecosystem>` | No (parameterized) | Installs the two SCA binaries and generates `target/bom.json` |
-| 6 | `python ci/sca_scan.py` | No | Runs both tools against the SBOM, applies the CVSS-score gate |
-| 7 | `upload-sarif` (x2) + `upload-artifact` | No | One category per tool, plus the merged artifact |
+| 5 | Install scanner tooling and generate the SBOM (`setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <ecosystem>`) | No (parameterized) | Installs the two SCA binaries and generates `target/bom.json` |
+| 6 | Run the SCA scan (`python ci/sca_scan.py`) | No | Runs both tools against the SBOM, applies the CVSS-score gate |
+| 7 | Publish SARIF results and the report artifact | No | One category per tool, plus the merged artifact |
 
 Because only steps 3 and 4 differ, onboarding a new ecosystem to this
 pipeline is a two-step change to the workflow file, not a rewrite, see
@@ -140,13 +143,17 @@ See also: [why-sboms.md](../explanation/why-sboms.md),
 
 ## Generic GitHub Actions template
 
-This is the full `sca.yml` shape with the ecosystem-specific block called
-out. Swap in the matching block from the
-[ecosystem matrix](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix)
+This is a concrete, generic example of the vendor-neutral steps above,
+expressed as a GitHub Actions workflow, with the ecosystem-specific block
+called out. Swap in the matching cache path/key and install command from
+the [ecosystem matrix](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix)
 (Maven, Gradle, npm, raw JavaScript, Python, Go, or an ecosystem you've
 added yourself, see
 [Adding a new ecosystem](../how-to/integrate-a-new-ecosystem.md#adding-a-new-ecosystem-not-in-the-matrix)):
-everything else in the file is identical regardless of language.
+everything else in the file is identical regardless of language. The
+cache step itself takes the exact shape shown once in
+[Caching](#caching) above, only the `path`, `key`, and `restore-keys`
+values change.
 
 ```yaml
 name: Software Composition Analysis (SCA)
@@ -177,13 +184,10 @@ jobs:
         with:
           python-version: '3.14.4'
 
-      # --- replace this block with the matching ecosystem block from the ecosystem matrix ---
-      - name: Cache dependencies
-        uses: actions/cache@v6
-        with:
-          path: <ecosystem cache path>
-          key: ${{ runner.os }}-<ecosystem>-v1-${{ hashFiles('<lockfile glob>') }}
-          restore-keys: ${{ runner.os }}-<ecosystem>-v1-
+      # --- ecosystem-specific block: cache step (see Caching above for the canonical shape) + install command ---
+      # - name: Cache dependencies
+      #   uses: actions/cache@v6
+      #   with: { path: <ecosystem cache path>, key: ..., restore-keys: ... }
 
       - name: Install / resolve dependencies
         run: <ecosystem install command>

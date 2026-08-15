@@ -67,6 +67,54 @@ download_and_verify() {
 }
 ```
 
+## Pinning `uses:` actions to a commit SHA
+
+`setup-tools.sh`'s SHA256 checksum pinning above and the GitHub Actions
+`uses:` pins referenced throughout this handbook are the same underlying
+practice applied to two different kinds of downloaded artifact: a binary
+release tarball in one case, a third-party Action's source in the other.
+Both exist to give the pipeline an **immutable** reference to what it
+runs, rather than a mutable one that could resolve to different content
+tomorrow than it does today.
+
+A tag or branch name (`@v6`, `@main`) is a mutable pointer: the maintainer
+of that Action can move the tag to point at different, possibly malicious,
+code without changing the version string in your workflow file at all.
+The correct technical term for the fix is **commit SHA pinning**: pinning
+a `uses:` reference to the full 40-character Git commit SHA of the exact
+commit you intend to run, instead of a tag. A commit SHA is content-
+addressed, it cannot be reassigned to point at different code, so it
+gives the same immutability guarantee for an Action's source that a
+SHA256 checksum gives for a downloaded binary.
+
+```yaml
+# Mutable: this tag can be moved to point at different code later
+- uses: actions/setup-python@v6
+
+# Commit SHA-pinned (illustrative SHA below): this reference cannot be
+# reassigned; the trailing comment records the human-readable version for
+# maintainers, the same role the "# renovate:" comment plays for
+# setup-tools.sh's checksums
+- uses: actions/setup-python@3bf3c327b16a3c5c1e0e2d1d9d5d9d5e5f5c5b5a # v6.2.0
+```
+
+This is why every code snapshot in this handbook (see
+[platform-backend.md](../case-studies/platform-backend.md#code-snapshot-platform-backends-actual-scayml)
+and
+[platform-ui.md](../case-studies/platform-ui.md#code-snapshot-platform-uis-actual-scayml))
+pins every `uses:` to a full commit SHA in the real, currently-running
+workflow, even though the generic templates elsewhere in this handbook
+show floating `@v6`/`@v7`-style tags for readability. Treat those floating
+tags as placeholders to resolve to a commit SHA before using a template
+in a real workflow, the same way the ecosystem placeholders (`<ecosystem
+cache path>`, `<ecosystem install command>`) need resolving before the
+template runs.
+
+Renovate (or an equivalent dependency-update bot) can keep commit-SHA
+pins current automatically, the same way the `# renovate:` markers keep
+`setup-tools.sh`'s version/checksum pairs current, so pinning to a SHA
+does not mean manually chasing upstream releases by hand.
+
 ## Script safety flags
 
 ```bash

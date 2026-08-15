@@ -1,12 +1,15 @@
 # Case Study: `platform-ui`
 
-`platform-ui` (Medical Informatics Platform org on GitHub) is the second
-reference implementation this handbook is built against, an Angular, npm
-service. Where the [`platform-backend` case study](platform-backend.md)
-covers the Maven-side false-positive investigation, this one covers the
-npm-side finding that shaped the case for running multiple SCA tools
-rather than one: a malware false positive caused by a PURL casing
-collision.
+[`platform-ui`](https://github.com/Medical-Informatics-Platform/platform-ui)
+(Medical Informatics Platform org on GitHub) is the second reference
+implementation this handbook is built against, an Angular, npm service,
+with the same small amount of Python used for the CI orchestrators as
+`platform-backend` (`ci/*.py`, see
+[reference/python-orchestrators.md](../reference/python-orchestrators.md)).
+Where the [`platform-backend` case study](platform-backend.md) covers the
+Maven-side false-positive investigation, this one covers the npm-side
+finding that shaped the case for running multiple SCA tools rather than
+one: a malware false positive caused by a PURL casing collision.
 
 ## The malware false positive
 
