@@ -4,16 +4,15 @@ Trivy and OSV-Scanner are both run against the same SBOM in the SCA
 pipeline, rather than picking one. This was a deliberate decision based on
 observed differences between the two, not redundancy for its own sake.
 
-TODO : clean all repitiaon  , mention that gaps between database , sync of tools , some tools put cve score  unkonwn , anyway -> main reason they don't catch the same thing
-
 ## They don't always catch the same vulnerabilities
 
 During local testing, one tool sometimes reported a finding with no
 severity score at all (marked "unknown"), where the other tool supplied an
 actual score for the same or a related finding. Some CVEs were also new
-enough that database coverage between the two differed. Relying on either
-tool alone meant accepting gaps the other tool could fill.
-
+enough that database coverage between the two differed, each tool syncs
+against its own upstream vulnerability database on its own schedule, so a
+CVE can appear in one before the other. Relying on either tool alone meant
+accepting gaps the other tool could fill.
 
 ## They have meaningfully different CLI behavior around failing a build
 

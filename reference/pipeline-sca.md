@@ -8,20 +8,17 @@
 | Scans | Application dependencies, via a generated SBOM, not the source code and not a container image |
 | Tools | Trivy, OSV-Scanner |
 | Gate model | CVSS-score gate (see [gate-status-cvss.md](gate-status-cvss.md)) |
+| Supported ecosystems | Maven, Gradle, npm, raw JavaScript, Python, Go, see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md) |
 
 ## Execution order
 
 ```mermaid
 flowchart TD
     A["Checkout + Setup Python"] --> B{"Ecosystem?"}
-    B -->|Maven| C1["Cache ~/.m2/repository"]
-    C1 --> C2["mvn dependency:resolve -q"]
-    C2 --> C3["setup-tools.sh --sbom-ecosystem maven\n(mvn cyclonedx-maven-plugin -> target/bom.json)"]
-    B -->|npm| D1["Cache ~/.npm"]
-    D1 --> D2["npm ci"]
-    D2 --> D3["setup-tools.sh --sbom-ecosystem npm\n(cyclonedx-npm -> target/bom.json)"]
+    B -->|any ecosystem| C1["Cache dependency store\n(path + key vary per ecosystem)"]
+    C1 --> C2["Install / resolve dependencies"]
+    C2 --> C3["setup-tools.sh --sbom-ecosystem <ecosystem>\n(generates target/bom.json)"]
     C3 --> E["sca_scan.py"]
-    D3 --> E
     E --> F["run_trivy(): trivy sbom target/bom.json"]
     E --> G["run_osv_scanner(): osv-scanner scan source --lockfile target/bom.json"]
     F --> H["parse_sarif.evaluate()\nCVSS-score gate"]
@@ -31,6 +28,10 @@ flowchart TD
     I --> K["Upload merged SARIF artifact"]
     J --> K
 ```
+
+`sca_scan.py` itself has no ecosystem awareness at all, it only reads
+`SBOM_PATH`. Everything upstream of that (dependency install, SBOM
+generation) is what varies per ecosystem.
 
 ## Environment variables
 
@@ -63,34 +64,29 @@ OSV-Scanner's own exit code.
 
 ## Running it locally
 
-**Maven:**
+Exact install/SBOM commands per ecosystem (Maven, Gradle, npm, raw
+JavaScript, Python, Go) are in
+[integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix).
+General shape:
 
 ```bash
-mvn dependency:resolve -q
-bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem maven
-python ci/sca_scan.py
-```
-
-**npm:**
-
-```bash
-npm ci
-bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem npm
+<install/resolve dependencies for your ecosystem>
+bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <ecosystem>
 python ci/sca_scan.py
 ```
 
 ## Caching
 
-| Ecosystem | Cache path | Cache key |
-|---|---|---|
-| Maven | `~/.m2/repository` | `${{ runner.os }}-m2-v1-${{ hashFiles('**/pom.xml') }}` |
-| npm | `~/.npm` | `${{ runner.os }}-npm-v1-${{ hashFiles('**/package-lock.json') }}` |
-
-The npm cache key must be derived from `package-lock.json`, not
-`package.json`. Hashing the wrong file could give two different resolved
-dependency trees the same cache key, a correctness bug, not just a
-performance one, since the cached tarballs would then be reused across
-builds that should have installed different versions.
+Cache path and key are the one piece of the pipeline that must match the
+dependency manager in use. See the
+[ecosystem matrix](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix)
+for the exact path/key pair per ecosystem. The general rule: the cache key
+must be derived from the **lockfile** (`pom.xml`, `package-lock.json`,
+`go.sum`, etc.), never from the manifest alone. Hashing the wrong file
+could give two different resolved dependency trees the same cache key, a
+correctness bug, not just a performance one, since the cached artifacts
+would then be reused across builds that should have resolved different
+versions.
 
 See also: [why-sboms.md](../explanation/why-sboms.md),
 [why-two-sca-tools.md](../explanation/why-two-sca-tools.md).

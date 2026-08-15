@@ -55,7 +55,10 @@ winning version when multiple declarations conflict:
 
 None of this resolution logic is visible to a scanner reading raw POM
 files in a cache. It only becomes visible in the artifact Maven produces
-*after* resolution finishes.
+*after* resolution finishes. Gradle, npm, Poetry, and Go modules each have
+their own conflict-resolution algorithm, different rules, same underlying
+problem: a raw dependency cache reflects every version ever declared
+anywhere in the graph, not the one version the build actually resolved to.
 
 ## The fix: scan the SBOM, not the cache
 
@@ -76,6 +79,13 @@ installed tree, which only exists after `npm ci` runs against
 `package-lock.json`, not the looser version ranges in `package.json`, and
 why `npm ci` (not `npm install`) is required before SBOM generation, see
 [pipeline-sca.md](../reference/pipeline-sca.md).
+
+The same principle is why every ecosystem's SBOM generator in
+[integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md)
+reads a resolved, locked dependency state (`go.sum`, `poetry.lock`, a
+resolved Gradle configuration) rather than a manifest's declared version
+ranges: a manifest describes what's allowed, a lockfile describes what's
+actually used, and only the latter is safe to scan.
 
 ## Measured impact
 
@@ -101,7 +111,7 @@ Central). Under repeated CI runs from the same IP range, this can trigger
 registry-side rate limiting (HTTP 429), which fails the tool run entirely,
 not just the scan quality. Scanning a pre-generated SBOM avoids this class
 of failure for the scan step itself. See
-[troubleshoot-maven-rate-limit.md](../how-to/troubleshoot-maven-rate-limit.md).
+[troubleshoot-registry-rate-limits.md](../how-to/troubleshoot-registry-rate-limits.md).
 
 ## What an SBOM is, briefly
 
@@ -109,4 +119,5 @@ An SBOM is a list of every software component and dependency in a
 project, the equivalent of an ingredients list for software.
 [CycloneDX](https://cyclonedx.org/) is the standard format used here, a
 structured schema (JSON in this setup) for representing that inventory
-consistently so tools like Trivy and OSV-Scanner can parse it reliably.
+consistently so tools like Trivy and OSV-Scanner can parse it reliably,
+regardless of which ecosystem or build tool produced it.

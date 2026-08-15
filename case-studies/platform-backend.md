@@ -1,13 +1,14 @@
 # Case Study: `platform-backend`
 
-Todo : Things feel redundant , case-studies should be for platform-ui and platform-backend 
+`platform-backend` (Medical Informatics Platform org on GitHub) is one of
+the two reference implementations this handbook is built against, a
+Maven, Spring Boot service. This case study walks through the concrete,
+named investigation that shaped the SCA pipeline's design, in particular
+why it scans an SBOM instead of the raw Maven cache.
 
-
-`platform-backend` (Medical Informatics Platform org on GitHub) is the
-reference implementation this whole handbook is built against, a Maven,
-Spring Boot service. This case study walks through the concrete, named
-investigation that shaped the SCA pipeline's design, in particular why it
-scans an SBOM instead of the raw Maven cache.
+For the companion npm-side investigation (a malware false positive caused
+by a PURL casing collision), see
+[case-studies/platform-ui.md](platform-ui.md).
 
 ## The starting problem
 
@@ -57,37 +58,16 @@ Central began returning HTTP 429 (Too Many Requests), it interpreted the
 volume of requests from a single CI-runner IP as abuse. This is
 documented, with Trivy's own recommended mitigation
 (`--offline-scan`), in
-[how-to/troubleshoot-maven-rate-limit.md](../how-to/troubleshoot-maven-rate-limit.md).
+[how-to/troubleshoot-registry-rate-limits.md](../how-to/troubleshoot-registry-rate-limits.md).
 This is also part of why `mvn dependency:resolve` runs as its own explicit
 CI step ahead of SBOM generation, see
 [reference/pipeline-sca.md](../reference/pipeline-sca.md), rather than
 letting Trivy resolve artifacts on demand during the scan itself.
 
-## `platform-ui`'s companion story: the malware false positive
-
-While `platform-backend` surfaced the Maven false-positive problem,
-`platform-ui`'s npm-based testing surfaced a different, unrelated false
-positive worth recording here since it shaped the case for running
-multiple tools (see
-[explanation/why-two-sca-tools.md](../explanation/why-two-sca-tools.md)):
-Dependency-Track flagged a malware finding (`MAL-2022-4051`) against
-`platform-ui`'s legitimate dependency `jQuery-QueryBuilder`. The cause was
-a PURL collision: `cyclonedx-npm` lowercases all package names when
-generating the SBOM, producing `pkg:npm/jquery-querybuilder@3.0.0`. A
-real, unrelated malicious package is registered on npm under that same
-lowercase name, `jquery-querybuilder`. Because npm's own registry is
-case-insensitive, both the legitimate `jQuery-QueryBuilder` and the
-malicious `jquery-querybuilder` collapse into the same PURL once
-lowercased, and Dependency-Track (which relies on the PURL as its lookup
-key against OSV) couldn't tell them apart. Notably, this same malware flag
-was **not** caught by `npm audit`, only by Dependency-Track via OSV,
-concrete evidence for why relying on a single tool and a single database
-leaves gaps.
-
 ## What this shaped in the final pipeline
 
 - SCA scans the generated SBOM (`target/bom.json`), not the raw
-  dependency cache, for both Maven and npm.
+  dependency cache, for every ecosystem, not just Maven.
 - `mvn dependency:resolve -q` runs as an explicit, separate CI step before
   SBOM generation.
 - Both Trivy and OSV-Scanner run against the SBOM, gated through the

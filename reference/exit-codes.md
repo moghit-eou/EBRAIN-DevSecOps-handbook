@@ -5,16 +5,16 @@ Facts only. For the reasoning behind treating a missing SARIF file as an
 [why-cvss-based-gating.md](../explanation/why-cvss-based-gating.md).
 
 ## Orchestrator script exit codes
- 
+
 | Script | Exit 0 | Exit 1 |
 |---|---|---|
 | `sast_scan.py` | OpenGrep gate passed | OpenGrep gate failed, or its SARIF output is missing (`ERROR`, treated as a failure) |
 | `sca_scan.py` | Every SCA tool passed or only warned | Any SCA tool's gate failed, its SARIF is missing, or it exited non-zero while still writing a SARIF file |
 | `container_scan.py --scan-type sast` | Both Hadolint and OpenGrep passed | Either tool's gate failed or errored |
 | `container_scan.py --scan-type sca` | Every SCA tool passed or only warned | Same failure conditions as `sca_scan.py` |
- 
+
 ## Raw tool exit code handling
- 
+
 | Tool | Raw exit code meaning | How the orchestrator normalizes it |
 |---|---|---|
 | Trivy (`fs`, `sbom`, `image`) | Reflects Trivy's own run status | Passed through as-is to the orchestrator's exit-code check |

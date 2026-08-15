@@ -11,6 +11,11 @@ DevSecOps-aligned CI/CD security pipeline, built as a Google Summer of Code
 2026 project for the EBRAINS community, using the **Medical Informatics
 Platform (MIP)** as the proof of concept.
 
+The pipeline design itself is **vendor-neutral and language-agnostic**: it
+runs on GitHub Actions today, but nothing in `setup-tools.sh`,
+`sca_scan.py`, `sast_scan.py`, `container_scan.py`, or `parse_sarif.py`
+depends on a specific CI provider or a specific build ecosystem. See
+[how-to/integrate-a-new-ecosystem.md](how-to/integrate-a-new-ecosystem.md).
 
 ## Platform and maintenance notes
 
@@ -18,23 +23,16 @@ Platform (MIP)** as the proof of concept.
 > of Code 2026 project that is still under active development. Content
 > reflects the pipelines as they exist today, not a finished, frozen
 > product. Commands, thresholds, and file layouts may still change before
-> the project ends. Where something is a decision still being discussed
-> rather than a shipped fact, it is marked as such.
+> the project ends.
 
 - Everything documented here has been built and tested on **Linux x86_64 /
   Ubuntu**, matching the `ubuntu-latest` GitHub Actions runner image. The
   install script (`setup-tools.sh`) is not portable as-is to macOS or
   native Windows. WSL2 works for Windows because it provides a real Linux
-  userspace. There is currently no working path on native macOS.
-- **Dockerizing the toolchain** (packaging the scanners into a container
-  image published to GHCR, so the pipeline runs via `docker run` instead of
-  the install script) is an idea under discussion with the project's docs
-  mentor. It is **not a decided direction**. Do not treat any reference to
-  it in this handbook as a shipped feature.
-- Because the project is still active, some pages contain `TODO:` markers
-  where the source material available at the time of writing did not cover
-  something. Treat those as open gaps, not omissions.
-
+  userspace. There is currently no working path on native macOS. See
+  [tool-installation-flags.md](reference/tool-installation-flags.md) for
+  the open question around eventually containerizing the toolchain to
+  close that gap.
 
 ## Table of Contents
 
@@ -43,10 +41,11 @@ Platform (MIP)** as the proof of concept.
 - **tutorials/**
   - [01-setup-guide.md](tutorials/01-setup-guide.md)
 - **how-to/**
+  - [integrate-a-new-ecosystem.md](how-to/integrate-a-new-ecosystem.md) — the universal, per-ecosystem integration matrix (Maven, Gradle, npm, raw JavaScript, Python, Go)
   - [suppress-a-finding.md](how-to/suppress-a-finding.md)
   - [adjust-severity-gate.md](how-to/adjust-severity-gate.md)
   - [add-new-scanner.md](how-to/add-new-scanner.md)
-  - [troubleshoot-maven-rate-limit.md](how-to/troubleshoot-maven-rate-limit.md)
+  - [troubleshoot-registry-rate-limits.md](how-to/troubleshoot-registry-rate-limits.md)
   - [troubleshoot-sbom-generation-errors.md](how-to/troubleshoot-sbom-generation-errors.md)
 - **reference/**
   - [pipeline-container-scanning.md](reference/pipeline-container-scanning.md)
@@ -66,6 +65,7 @@ Platform (MIP)** as the proof of concept.
   - [why-opengrep-not-semgrep.md](explanation/why-opengrep-not-semgrep.md)
 - **case-studies/**
   - [platform-backend.md](case-studies/platform-backend.md)
+  - [platform-ui.md](case-studies/platform-ui.md)
 
 ## Why this exists
 
@@ -79,9 +79,10 @@ the [OWASP DevSecOps Guideline](https://github.com/OWASP/DevSecOpsGuideline)
 as the implementation reference.
 
 The outcome is a working reference pipeline that produces security
-artifacts automatically (scan reports, SBOMs, gate decisions), reused across
-three MIP components (`platform-backend`, `platform-ui`, and container
-images), packaged here as a reusable secure-pipeline blueprint.
+artifacts automatically (scan reports, SBOMs, gate decisions), proven
+against two MIP components with different stacks (`platform-backend`,
+Maven/Java; `platform-ui`, npm/Angular) plus their container images, and
+packaged here as a reusable, ecosystem-agnostic secure-pipeline blueprint.
 
 ## What is actually implemented
 
@@ -98,45 +99,11 @@ gate:
 See [reference/pipeline-container-scanning.md](reference/pipeline-container-scanning.md),
 [reference/pipeline-sca.md](reference/pipeline-sca.md), and
 [reference/pipeline-sast.md](reference/pipeline-sast.md) for the exact
-commands, flags, and files involved in each.
-
-### Architecture
-
-Todo : I think this mermaid charts should be moved somewhere else 
-
-```mermaid
-flowchart LR
-    PR["Pull Request \nworkflow dispatch \nweekly schedule"]
-
-    subgraph CS["container scanning"]
-        CS_SAST["SAST half\nHadolint + OpenGrep\n(scans Dockerfile)"]
-        CS_SCA["SCA half\nTrivy + OSV-Scanner\n(scans built image)"]
-    end
-
-    subgraph SCA["sca.yml"]
-        SCA_SBOM["Generate SBOM\n(CycloneDX)"]
-        SCA_SCAN["Trivy + OSV-Scanner\n(scan the SBOM)"]
-        SCA_SBOM --> SCA_SCAN
-    end
-
-    subgraph SAST["sast.yml"]
-        SAST_SCAN["OpenGrep\n(scans source code)"]
-    end
-    
-    SARIF["Downloadable SARIF Artifact\n(30-day retention)"]
-    SEC[("GitHub Security Tab")]
-
-    PR --> CS
-    PR --> SCA
-    PR --> SAST
-
-    CS_SAST --> SARIF
-    CS_SCA --> SARIF
-    SCA_SCAN --> SARIF
-    SAST_SCAN --> SARIF
-    
-    SARIF --> SEC
-```
+commands, flags, and files involved in each. The full architecture diagram
+(all three pipelines, their triggers, and where they converge on the
+GitHub Security tab) lives in
+[explanation/why-three-independent-pipelines.md](explanation/why-three-independent-pipelines.md#independent-triggers-and-parallel-execution)
+rather than being repeated here.
 
 All three workflows trigger independently and run in parallel; each
 uploads its own SARIF category to the Security tab, see
@@ -162,14 +129,18 @@ content there later, if that path is chosen, needs minimal rework:
 
 - New to this and want to set up the tools locally: start with
   [tutorials/01-setup-guide.md](tutorials/01-setup-guide.md).
+- Onboarding a repository that isn't Maven or npm (Gradle, raw JavaScript,
+  Python, Go): go straight to
+  [how-to/integrate-a-new-ecosystem.md](how-to/integrate-a-new-ecosystem.md).
 - Already running the pipelines and need to do one specific thing (suppress
   a finding, add a scanner, adjust a gate): go to [how-to/](how-to/).
 - Want exact commands, flags, exit codes, or gate thresholds: go to
   [reference/](reference/).
 - Want to understand *why* the pipelines are built this way: go to
   [explanation/](explanation/).
-- Want the concrete, named story of how this was built against
-  `platform-backend`: read [case-studies/platform-backend.md](case-studies/platform-backend.md).
+- Want the concrete, named story of how this was built and validated
+  against `platform-backend` (Maven) and `platform-ui` (npm): read
+  [case-studies/](case-studies/).
 
 ## Relationship to OWASP
 

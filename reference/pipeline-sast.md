@@ -9,7 +9,6 @@
 | Tool | OpenGrep |
 | Gate model | Rule-severity gate (see [gate-status-rule-severity.md](gate-status-rule-severity.md)) |
 
-
 ## Execution order
 
 `run_opengrep()` runs the scanner **twice**, with the same base command
@@ -39,23 +38,38 @@ still recorded and visible, without being able to block the build.
 
 | Variable | Purpose |
 |---|---|
-| `SEMGREP_CONFIG_RULESETS` | Space-separated list of OpenGrep/Semgrep rule packs to run, differs per repository (see below) |
+| `SEMGREP_CONFIG_RULESETS` | Space-separated list of OpenGrep/Semgrep rule packs to run. This is the one part of the SAST pipeline that's language-specific, adjust it to match the languages actually present in the repository |
 | `OPENGREP_EXCLUDE` | Space-separated glob patterns excluded from the scan |
 | `OPENGREP_SARIF_OUTPUT` | Output path for the SARIF report |
 
-### Ruleset configuration by repository
+### Choosing `SEMGREP_CONFIG_RULESETS` for a new repository
 
-| Repository | `SEMGREP_CONFIG_RULESETS` |
-|---|---|
-| `platform-backend` (Java) | `semgrep-rules/generic semgrep-rules/problem-based-packs semgrep-rules/bash semgrep-rules/java auto semgrep-rules/yaml semgrep-rules/package_managers p/default` |
-| `platform-ui` (Angular/npm) | `semgrep-rules/generic semgrep-rules/problem-based-packs semgrep-rules/bash semgrep-rules/javascript semgrep-rules/yaml semgrep-rules/package_managers p/default semgrep-rules/json` |
+Pick rule packs that match the languages actually in the repository, plus
+the generic/cross-language packs. Two worked examples from the reference
+implementations:
 
-### Exclude patterns by repository
+| Repository | Stack | `SEMGREP_CONFIG_RULESETS` |
+|---|---|---|
+| `platform-backend` | Java / Maven | `semgrep-rules/generic semgrep-rules/problem-based-packs semgrep-rules/bash semgrep-rules/java auto semgrep-rules/yaml semgrep-rules/package_managers p/default` |
+| `platform-ui` | TypeScript / npm | `semgrep-rules/generic semgrep-rules/problem-based-packs semgrep-rules/bash semgrep-rules/javascript semgrep-rules/yaml semgrep-rules/package_managers p/default semgrep-rules/json` |
+
+For a Python repository, the equivalent starting point would swap
+`semgrep-rules/java` or `semgrep-rules/javascript` for `semgrep-rules/python`;
+for Go, `semgrep-rules/go`. See
+[why-opengrep-not-semgrep.md](../explanation/why-opengrep-not-semgrep.md#choosing-rulesets)
+for the tradeoff between stacking specific packs and using `auto`.
+
+### `OPENGREP_EXCLUDE` by repository
 
 | Repository | `OPENGREP_EXCLUDE` |
 |---|---|
 | `platform-backend` | `*.sarif ci/ Dockerfile* .pre-commit-config.yaml docs/** README.md AGENTS.md` |
 | `platform-ui` | `*.sarif ci/ Dockerfile* dist/** build/** node_modules/** .angular/**` |
+
+Exclude build output and dependency directories (`node_modules/`,
+`dist/`, `build/`, `target/`, `vendor/`) for any ecosystem, scanning
+generated or vendored code wastes time and produces findings that can't be
+fixed at the source.
 
 ## Running it locally
 
@@ -63,6 +77,9 @@ still recorded and visible, without being able to block the build.
 bash ci/setup-tools.sh --install-tool opengrep,semgrep-rules
 python ci/sast_scan.py
 ```
+
+This is identical for every ecosystem, OpenGrep scans source text, it has
+no dependency on a build tool or package manager.
 
 ## Exit code to status mapping
 

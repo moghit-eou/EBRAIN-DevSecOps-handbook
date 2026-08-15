@@ -6,6 +6,10 @@ Hadolint. There is no dedicated plugin system, adding a tool means
 touching three files: `setup-tools.sh`, the relevant orchestrator script,
 and the workflow YAML.
 
+(To add support for a new **ecosystem** rather than a new **tool**, see
+[integrate-a-new-ecosystem.md](integrate-a-new-ecosystem.md) instead, it
+follows the same three-file pattern applied to SBOM generation.)
+
 ## 1. Add installation to `setup-tools.sh`
 
 Every existing tool follows the same shape: a pinned version, a pinned
