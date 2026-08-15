@@ -4,15 +4,15 @@ Every tool in these pipelines was tested locally before being wired into
 CI. This page summarizes what was selected, what was tested and
 explicitly rejected, and why. The underlying local scan results referenced
 here come from the project's local vulnerability scan report and the
-working notes taken during that testing; see the case study for the fuller
-narrative of one specific investigation.
+working notes taken during that testing; see the case studies for the
+fuller narrative of each investigation.
 
-TODO: this page should cite the local vulnerability-scan PDF report
-directly (it was produced before any tool was chosen for the CI pipeline,
-per the project brief). That PDF was not available as a source when this
-page was written, only the working notes describing its findings were.
-Replace the general references below with direct citations to the report
-once it's available as a source.
+> **Sourcing note:** the local vulnerability-scan report that originally
+> produced these findings was not yet available as a citable source when
+> this page was written, only the working notes describing its results
+> were. The numbers and conclusions below come from those working notes.
+> If the report becomes available as a source, the general references
+> below should be replaced with direct citations to it.
 
 ## Selected for CI
 
@@ -27,7 +27,7 @@ once it's available as a source.
 
 | Tool | Why it was rejected |
 |---|---|
-| **npm-audit** | Locked to the npm ecosystem only, doesn't generalize to the Maven side of the project (`platform-backend`), so it wasn't chosen as the standard SCA tool across both services. |
+| **npm-audit** | Locked to the npm ecosystem only, doesn't generalize across a multi-ecosystem project, so it wasn't chosen as the standard SCA tool. |
 | **OWASP Dependency-Check** | Pulls CVE data from NVD, and NVD's own rate limiting made it unreliable to pull data from consistently. It also does not support scanning an existing SBOM file directly, it scans source code, project manifests, and lockfiles directly instead, which conflicts with this project's SBOM-first approach (see [why-sboms.md](why-sboms.md)). |
 | **Dependency-Track** | Useful for local analysis and visualization (uploading a generated SBOM and browsing results in its dashboard), but not wired into CI, it's a standalone platform rather than a CLI step suited to a pipeline gate. |
 | **Snyk (Snyk Code)** | Considered as a secondary layer for app-logic vulnerabilities. Free tier caps out at 100 tests/month, which doesn't fit a project with private repos and frequent PR-triggered scans. Requires a `SNYK_TOKEN` and a live network call, so it can't run in a fully offline or local dry-run the way OpenGrep can. |
@@ -68,3 +68,4 @@ local iteration.
 - [why-opengrep-not-semgrep.md](why-opengrep-not-semgrep.md)
 - [why-sboms.md](why-sboms.md)
 - [case-studies/platform-backend.md](../case-studies/platform-backend.md)
+- [case-studies/platform-ui.md](../case-studies/platform-ui.md)

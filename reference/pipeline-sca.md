@@ -8,22 +8,17 @@
 | Scans | Application dependencies, via a generated SBOM, not the source code and not a container image |
 | Tools | Trivy, OSV-Scanner |
 | Gate model | CVSS-score gate (see [gate-status-cvss.md](gate-status-cvss.md)) |
-
-Everything on this page, the orchestrator, the two tools, the gate, is
-identical regardless of ecosystem. The only ecosystem-specific piece is the
-"Ecosystem?" branch below, which resolves dependencies, caches the right
-directory, and generates the SBOM differently per language. See
-[ecosystem-matrix.md](ecosystem-matrix.md) for the full, current set of
-supported ecosystems (Maven, npm shipped; Gradle, Python documented;
-raw JavaScript has no SBOM path), that page is the single place this
-branch is documented, not repeated here.
+| Supported ecosystems | Maven, Gradle, npm, raw JavaScript, Python, Go, see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md) |
 
 ## Execution order
 
 ```mermaid
 flowchart TD
-    A["Checkout + Setup Python"] --> B{"Ecosystem?\n(see ecosystem-matrix.md)"}
-    B -->|"resolve + cache + SBOM,\nper ecosystem-matrix.md"| E["sca_scan.py"]
+    A["Checkout + Setup Python"] --> B{"Ecosystem?"}
+    B -->|any ecosystem| C1["Cache dependency store\n(path + key vary per ecosystem)"]
+    C1 --> C2["Install / resolve dependencies"]
+    C2 --> C3["setup-tools.sh --sbom-ecosystem <ecosystem>\n(generates target/bom.json)"]
+    C3 --> E["sca_scan.py"]
     E --> F["run_trivy(): trivy sbom target/bom.json"]
     E --> G["run_osv_scanner(): osv-scanner scan source --lockfile target/bom.json"]
     F --> H["parse_sarif.evaluate()\nCVSS-score gate"]
@@ -33,6 +28,10 @@ flowchart TD
     I --> K["Upload merged SARIF artifact"]
     J --> K
 ```
+
+`sca_scan.py` itself has no ecosystem awareness at all, it only reads
+`SBOM_PATH`. Everything upstream of that (dependency install, SBOM
+generation) is what varies per ecosystem.
 
 ## Environment variables
 
@@ -55,52 +54,39 @@ trivy sbom "$SBOM_PATH" --format sarif --ignorefile "$TRIVY_IGNOREFILE" --output
 osv-scanner scan source --lockfile "$SBOM_PATH" --config "$OSV_IGNOREFILE" --format sarif --output-file "$OSV_SARIF_OUTPUT"
 ```
 
-Both commands are the same regardless of ecosystem, they operate on
-`target/bom.json`, whatever generated it. Note the OSV-Scanner
-orchestration detail: OSV-Scanner returns exit code `1` whenever it finds
-any vulnerability at all, regardless of severity. `run_osv_scanner()`
-treats that specific exit code as non-fatal and remaps it to `0`, so the
-pipeline continues to the SARIF-based gate evaluation instead of failing
-immediately on any finding. The actual pass/fail decision comes from
-`parse_sarif.evaluate()` afterward, not from OSV-Scanner's own exit code.
+Note the OSV-Scanner orchestration detail: OSV-Scanner returns exit code
+`1` whenever it finds any vulnerability at all, regardless of severity.
+`run_osv_scanner()` treats that specific exit code as non-fatal and
+remaps it to `0`, so the pipeline continues to the SARIF-based gate
+evaluation instead of failing immediately on any finding. The actual
+pass/fail decision comes from `parse_sarif.evaluate()` afterward, not from
+OSV-Scanner's own exit code.
 
 ## Running it locally
 
-Look up your ecosystem's resolve and SBOM-generation commands in
-[ecosystem-matrix.md](ecosystem-matrix.md), then run:
+Exact install/SBOM commands per ecosystem (Maven, Gradle, npm, raw
+JavaScript, Python, Go) are in
+[integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix).
+General shape:
 
 ```bash
-<resolve-dependencies-command>                                                     # from the matrix
-bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <value>   # <value> from the matrix
-python ci/sca_scan.py
-```
-
-For example, for the two shipped ecosystems:
-
-```bash
-# Maven
-mvn dependency:resolve -q
-bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem maven
-python ci/sca_scan.py
-
-# npm
-npm ci
-bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem npm
+<install/resolve dependencies for your ecosystem>
+bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem <ecosystem>
 python ci/sca_scan.py
 ```
 
 ## Caching
 
-Cache paths and keys are ecosystem-specific and documented per-ecosystem in
-[ecosystem-matrix.md](ecosystem-matrix.md), not repeated here. The one
-correctness rule that applies across every ecosystem: **the cache key must
-be derived from the lockfile, not the manifest** (`package-lock.json`, not
-`package.json`; `poetry.lock`, not `pyproject.toml` alone). Hashing the
-wrong file can give two different resolved dependency trees the same cache
-key, a correctness bug, not just a performance one, since the cached
-artifacts would then be reused across builds that should have installed
-different versions.
+Cache path and key are the one piece of the pipeline that must match the
+dependency manager in use. See the
+[ecosystem matrix](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix)
+for the exact path/key pair per ecosystem. The general rule: the cache key
+must be derived from the **lockfile** (`pom.xml`, `package-lock.json`,
+`go.sum`, etc.), never from the manifest alone. Hashing the wrong file
+could give two different resolved dependency trees the same cache key, a
+correctness bug, not just a performance one, since the cached artifacts
+would then be reused across builds that should have resolved different
+versions.
 
 See also: [why-sboms.md](../explanation/why-sboms.md),
-[why-two-sca-tools.md](../explanation/why-two-sca-tools.md),
-[ecosystem-matrix.md](ecosystem-matrix.md).
+[why-two-sca-tools.md](../explanation/why-two-sca-tools.md).

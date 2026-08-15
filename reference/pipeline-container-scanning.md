@@ -11,6 +11,7 @@
 | Linting tools| Hadolint |
 | Gate model, image scan | CVSS-score gate (see [gate-status-cvss.md](gate-status-cvss.md)) |
 | Gate model, Dockerfile scan | Rule-severity gate (see [gate-status-rule-severity.md](gate-status-rule-severity.md)) |
+| Ecosystem-specific? | No, this pipeline scans the built image and the Dockerfile; it is identical for every language |
 
 ## Execution order
 
@@ -60,7 +61,7 @@ options:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `IMAGE_NAME` | `platform-ui:local` / `platform-backend:local` | Image reference passed to Trivy and OSV-Scanner |
+| `IMAGE_NAME` | `<service>:testing` | Image reference passed to Trivy and OSV-Scanner |
 | `TRIVY_IGNOREFILE` | `ci/suppress_trivy.yaml` | Trivy suppression file |
 | `OSV_IGNOREFILE` | `ci/suppress_osv_scanner.toml` | OSV-Scanner suppression file |
 | `TRIVY_SCA_SARIF_OUTPUT` | `sca-trivy-container.sarif` | Trivy image scan output |

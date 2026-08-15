@@ -1,12 +1,13 @@
-
 # How to Suppress a False Positive or Accepted-Risk Finding for SCA
 
 *Note: The vulnerabilities, dates, and packages shown in the configurations below are just examples.*
 
 - This applies to the **CVSS-score tools** (Trivy, OSV-Scanner) only.
-Suppression is shared between the Container Scanning and SCA pipelines,
-since both point at the same two ignore files. 
-- Only Suppressing findings in the event of false positives or noisy alerts that do not reflect actual risk.
+  Suppression is shared between the Container Scanning and SCA pipelines,
+  since both point at the same two ignore files.
+- Only suppress findings in the event of false positives or noisy alerts
+  that do not reflect actual risk.
+
 ## 1. Suppress a Trivy finding
 
 Edit `ci/suppress_trivy.yaml`:
@@ -33,7 +34,6 @@ vulnerabilities:
       - "pkg:maven/org.example/legacy-lib"
     statement: "Only present in test fixtures; not part of the shipped artifact."
     expires: 2026-11-01
-
 ```
 
 Always include a `statement` explaining why, and an `expires` date so the
@@ -54,10 +54,15 @@ reason = "Vulnerable function is never called."
 id = "GHSA-9jx5-6pgf-crrp"
 ignoreUntil = 2026-10-15
 reason = "Low severity DoS in a dev-only tool, not present in production build. Risk accepted by security team."
-
 ```
 
 Only use the accepted-risk pattern for LOW/MEDIUM severity findings with
 limited impact. Full reference:
 [OSV-Scanner: ignore vulnerabilities by ID](https://google.github.io/osv-scanner/configuration/#ignore-vulnerabilities-by-id).
 
+## OpenGrep / Hadolint findings (SAST)
+
+These aren't suppressed through a shared ignore file, handle them at the
+rule/finding level, either with an inline suppression comment supported by
+the tool, or by adjusting the ruleset itself, see
+[pipeline-sast.md](../reference/pipeline-sast.md).

@@ -1,18 +1,14 @@
 # Case Study: `platform-backend`
 
-Todo : Things feel redundant , case-studies should be for platform-ui and platform-backend
+`platform-backend` (Medical Informatics Platform org on GitHub) is one of
+the two reference implementations this handbook is built against, a
+Maven, Spring Boot service. This case study walks through the concrete,
+named investigation that shaped the SCA pipeline's design, in particular
+why it scans an SBOM instead of the raw Maven cache.
 
-> **Resolved as of this restructure:** the npm-side story previously
-> embedded in this file has been split out to
-> [case-studies/platform-ui.md](platform-ui.md), see that file for the
-> `jQuery-QueryBuilder` malware-flag/PURL-collision investigation. This
-> file now covers `platform-backend` only, per the note above.
-
-`platform-backend` (Medical Informatics Platform org on GitHub) is the
-reference implementation this whole handbook is built against, a Maven,
-Spring Boot service. This case study walks through the concrete, named
-investigation that shaped the SCA pipeline's design, in particular why it
-scans an SBOM instead of the raw Maven cache.
+For the companion npm-side investigation (a malware false positive caused
+by a PURL casing collision), see
+[case-studies/platform-ui.md](platform-ui.md).
 
 ## The starting problem
 
@@ -62,7 +58,7 @@ Central began returning HTTP 429 (Too Many Requests), it interpreted the
 volume of requests from a single CI-runner IP as abuse. This is
 documented, with Trivy's own recommended mitigation
 (`--offline-scan`), in
-[how-to/troubleshoot-maven-rate-limit.md](../how-to/troubleshoot-maven-rate-limit.md).
+[how-to/troubleshoot-registry-rate-limits.md](../how-to/troubleshoot-registry-rate-limits.md).
 This is also part of why `mvn dependency:resolve` runs as its own explicit
 CI step ahead of SBOM generation, see
 [reference/pipeline-sca.md](../reference/pipeline-sca.md), rather than
@@ -71,8 +67,7 @@ letting Trivy resolve artifacts on demand during the scan itself.
 ## What this shaped in the final pipeline
 
 - SCA scans the generated SBOM (`target/bom.json`), not the raw
-  dependency cache, for both Maven and npm, and for every ecosystem added
-  since, see [reference/ecosystem-matrix.md](../reference/ecosystem-matrix.md).
+  dependency cache, for every ecosystem, not just Maven.
 - `mvn dependency:resolve -q` runs as an explicit, separate CI step before
   SBOM generation.
 - Both Trivy and OSV-Scanner run against the SBOM, gated through the
@@ -84,5 +79,4 @@ letting Trivy resolve artifacts on demand during the scan itself.
 See [reference/pipeline-sca.md](../reference/pipeline-sca.md) for the
 resulting workflow, and
 [explanation/why-sboms.md](../explanation/why-sboms.md) for the general
-explanation this case study is the evidence for. For the npm-side companion
-investigation, see [case-studies/platform-ui.md](platform-ui.md).
+explanation this case study is the evidence for.

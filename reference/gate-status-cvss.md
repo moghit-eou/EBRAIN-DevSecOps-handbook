@@ -1,7 +1,9 @@
 # Reference: CVSS-Score Gate
 
 Applies to: **Trivy, OSV-Scanner**, in both the SCA pipeline and the SCA
-half of the Container Scanning pipeline.
+half of the Container Scanning pipeline. Ecosystem-independent: the same
+gate applies whether the SBOM came from Maven, Gradle, npm, Python, or Go,
+see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md).
 
 ## How the score is computed
 

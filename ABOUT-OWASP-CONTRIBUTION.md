@@ -5,9 +5,12 @@
 This handbook is a companion to, not a replacement for, the
 [OWASP DevSecOps Guideline](https://github.com/OWASP/DevSecOpsGuideline).
 The guideline provides the general model, this handbook documents one
-concrete, working implementation of that model against a real Java/Spring
-Boot and Angular codebase, including the tool choices, rejected
-alternatives, and trade-offs that a general guideline cannot cover.
+concrete, working implementation of that model, including the tool
+choices, rejected alternatives, and trade-offs that a general guideline
+cannot cover. The implementation itself is vendor-neutral: it runs the
+same way on GitHub Actions or any other CI runner capable of executing
+bash and Python, see
+[how-to/integrate-a-new-ecosystem.md](how-to/integrate-a-new-ecosystem.md).
 
 During early research it became clear that two OWASP repositories exist
 for this content, and they are not in sync:
@@ -29,4 +32,3 @@ opened, based directly on lessons learned while building these pipelines:
   scanning, and normalizing gate checks across scanners so that tools
   reporting CVSS and tools reporting rule severity are handled
   consistently.
-

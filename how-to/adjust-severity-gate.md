@@ -32,10 +32,11 @@ python ci/sca_scan.py
 See [reference/gate-status-cvss.md](../reference/gate-status-cvss.md) for
 what the current default thresholds mean before changing them.
 
-TODO: exposing these thresholds as a CLI flag or environment variable
-instead of a hardcoded constant is not yet implemented. If you need
-per-repository thresholds, that's the gap to close, there is currently no
-supported way to do it without editing `parse_sarif.py` directly.
+> **Known limitation:** these thresholds are not exposed as a CLI flag or
+> environment variable, only as constants in `parse_sarif.py`. If a
+> repository needs a threshold different from the shared default, the only
+> current option is to edit `parse_sarif.py` directly for that repository,
+> there is no supported per-repository override.
 
 ## Rule-severity gate (OpenGrep, Hadolint)
 
@@ -49,9 +50,10 @@ changing the flag passed to the tool, not by editing a shared file.
 gate_cmd = (base_cmd + ["--severity=ERROR", "--error"])
 ```
 
-Change `--severity=ERROR` to a different OpenGrep severity level to change
-what counts as a blocking finding. See OpenGrep's own documentation for
-the full list of severity levels it supports.
+Change `--severity=ERROR` to a different OpenGrep severity level
+(`WARN`, `INFO`, see
+[gate-status-rule-severity.md](../reference/gate-status-rule-severity.md#rule-severity-levels))
+to change what counts as a blocking finding.
 
 **Hadolint**, in `container_scan.py`:
 
@@ -69,4 +71,3 @@ Change `--failure-threshold error` to a different Hadolint threshold
 See
 [reference/gate-status-rule-severity.md](../reference/gate-status-rule-severity.md)
 for what the current defaults mean.
-

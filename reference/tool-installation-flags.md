@@ -1,7 +1,7 @@
 # Reference: `setup-tools.sh` Flags and Installed Tools
 
 ```bash
-bash ci/setup-tools.sh --install-tool <tool1,tool2,...|all> [--sbom-ecosystem maven|npm|none]
+bash ci/setup-tools.sh --install-tool <tool1,tool2,...|all> [--sbom-ecosystem <ecosystem>|none]
 ```
 
 ## Platform support
@@ -17,17 +17,18 @@ Windows.
 | Windows native | Not supported |
 | macOS | No working path yet |
 
-TODO: dockerizing the toolchain and publishing it to a registry (GHCR), so
-it would run via `docker run` on any OS instead of the install script, is
-an idea under discussion with the docs mentor. It is not a decided
-direction. Do not treat it as a current option.
+> **Open item, not a decided direction:** packaging the toolchain into a
+> container image published to a registry (so the pipeline runs via
+> `docker run` on any OS instead of the install script) has been raised as
+> a way to close the macOS/native-Windows gap, but is not yet scoped or
+> committed. Do not treat it as a current option.
 
 ## Flags
 
 | Flag | Values | Purpose |
 |---|---|---|
 | `--install-tool` | comma-separated list, or `all` | Which scanner binaries to install |
-| `--sbom-ecosystem` | `maven`, `npm`, `none` | Which SBOM generator to run after tool installation |
+| `--sbom-ecosystem` | `maven`, `gradle`, `npm`, `raw-js`, `python`, `go`, `none` | Which SBOM generator to run after tool installation, see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md) |
 
 ## Installable tools
 
@@ -84,18 +85,15 @@ downstream error.
 | Value | Command run |
 |---|---|
 | `maven` | `mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -q` |
+| `gradle` | `./gradlew cyclonedxBom -q` |
 | `npm` | `npx --yes "@cyclonedx/cyclonedx-npm@${CYCLONEDX_NPM_VERSION}" --output-file target/bom.json` |
+| `raw-js` | `npx --yes @cyclonedx/cdxgen -t js -o target/bom.json .` |
+| `python` | `cyclonedx-py requirements requirements.txt -o target/bom.json` |
+| `go` | `cyclonedx-gomod mod -json -output target/bom.json` |
 | `none` | No SBOM generated |
 
 `container-scan.yml` scans the built image directly and needs no SBOM, so
-it always uses `--sbom-ecosystem none` (or omits the flag).
-
-Only `maven`, `npm`, and `none` are implemented in the shipped script today.
-Gradle and Python SBOM generation are documented but not yet wired in as
-`--sbom-ecosystem` values, run their commands directly instead of through
-this flag until that lands. Raw JavaScript with no package manager has no
-SBOM path at all, regardless of whether this flag is extended. See
-[ecosystem-matrix.md](ecosystem-matrix.md) for the full picture, per-ecosystem
-commands, caveats, and the proposed `case` block for closing this gap, and
-[explanation/why-vendor-neutral-pipelines.md](../explanation/why-vendor-neutral-pipelines.md)
-for why this consolidation happened.
+it always uses `--sbom-ecosystem none` (or omits the flag). Full
+command-by-command breakdown, including dependency install/resolve steps
+and cache configuration per ecosystem, is in
+[integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md#ecosystem-matrix).
