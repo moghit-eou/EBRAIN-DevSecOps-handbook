@@ -99,46 +99,6 @@ ecosystem:
 | 8 | `container_scan.py --merge-sarif ...` (`if: always()`) | Combines all four SARIF files into one artifact |
 | 9 | `upload-artifact` (`if: always()`) | Publishes the merged artifact, 30-day retention |
 
-## Caching
-
-There's no dependency store to cache here for the same reason there's no
-install step: this pipeline scans the built image and the `Dockerfile`,
-not a resolved dependency tree. Two optional, purely performance-oriented
-caches are still worth knowing about, since a slow `docker build` on every
-PR is the actual bottleneck in this pipeline, not the scanning itself:
-
-**Docker layer caching**, using `docker/build-push-action` with GitHub
-Actions cache backing, if the plain `docker build -t $IMAGE_NAME .` step
-becomes slow on a large image:
-
-```yaml
-- name: Build Docker image
-  uses: docker/build-push-action@v6
-  with:
-    context: .
-    tags: ${{ env.IMAGE_NAME }}
-    load: true            # required so `trivy image`/`osv-scanner` can see it locally
-    cache-from: type=gha
-    cache-to: type=gha,mode=max
-```
-
-**Trivy's own vulnerability database cache**, so every run doesn't
-re-download the full CVE database:
-
-```yaml
-- name: Cache Trivy DB
-  uses: actions/cache@v6
-  with:
-    path: ~/.cache/trivy
-    key: ${{ runner.os }}-trivy-db-${{ steps.trivy-db-date.outputs.date }}
-    restore-keys: ${{ runner.os }}-trivy-db-
-```
-
-Neither cache affects gate correctness the way the SCA pipeline's
-dependency cache does (see
-[pipeline-sca.md](pipeline-sca.md#caching)), a stale or missing cache here
-only costs build time, it never changes what Trivy, OSV-Scanner, Hadolint,
-or OpenGrep actually find.
 
 ## Generic GitHub Actions template
 

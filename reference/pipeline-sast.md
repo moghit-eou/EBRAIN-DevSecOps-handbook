@@ -101,32 +101,6 @@ There is no dependency-install step and no cache-restore step in this
 pipeline, OpenGrep reads source files directly; it never needs a resolved
 dependency tree the way the SCA pipeline's SBOM generation does.
 
-## Caching
-
-There is nothing to cache in the sense the SCA pipeline means it, no
-dependency store, no `node_modules`, no `.m2`, this pipeline never installs
-or resolves dependencies. The one thing worth caching, if `sast.yml` runs
-frequently (every PR, on a large monorepo), is the `semgrep-rules` clone
-itself, so `setup-tools.sh` doesn't re-clone the same pinned community
-ruleset on every run:
-
-```yaml
-- name: Cache semgrep-rules checkout
-  uses: actions/cache@v6
-  with:
-    path: <path used by setup-tools.sh to clone semgrep-rules, e.g. .cache/semgrep-rules>
-    key: ${{ runner.os }}-semgrep-rules-${{ env.SEMGREP_RULES_REF }}
-    restore-keys: ${{ runner.os }}-semgrep-rules-
-```
-
-Key this on the pinned commit/ref (`SEMGREP_RULES_REF` in
-`setup-tools.sh`), not a lockfile, since there is no lockfile here, the
-"version" being cached is the ruleset's own pinned git ref. This is
-optional: it only matters for scan-time performance, it has no effect on
-gate correctness, unlike the SCA pipeline's dependency cache where an
-incorrectly-keyed cache is a correctness bug (see
-[pipeline-sca.md](pipeline-sca.md#caching)).
-
 ## Generic GitHub Actions template
 
 Unlike the SCA and Container Scanning pipelines, this template needs no

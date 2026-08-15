@@ -4,6 +4,17 @@ This is the single most important design decision behind the SCA pipeline,
 and the one with the most concrete evidence behind it. This page is the
 canonical explanation; other pages link here instead of repeating it.
 
+
+## What an SBOM is, briefly
+
+An SBOM is a list of every software component and dependency in a
+project, the equivalent of an ingredients list for software.
+[CycloneDX](https://cyclonedx.org/) is the standard format used here, a
+structured schema (JSON in this setup) for representing that inventory
+consistently so tools like Trivy and OSV-Scanner can parse it reliably,
+regardless of which ecosystem or build tool produced it.
+
+
 ## The problem: scanning `~/.m2` directly produced 300+ false positives
 
 Early local testing against `platform-backend` (a Maven, Spring Boot
@@ -23,13 +34,23 @@ that library's authors originally specified).
 
 A scanner pointed at `~/.m2` reads every POM file it finds and treats each
 declared version as if it were actually used in the build, even when
-Maven's own conflict resolution overrode that version somewhere else. For
-the concrete, named example of this happening (`platform-backend`'s
+Maven's own conflict resolution overrode that version somewhere else. 
+
+**Concrete example, encountered directly during testing:**
+- The project depends on `micrometer-core 1.16.5`.
+- Inside micrometer's own POM, it declares `tomcat-embed-core 8.5.100` as
 `micrometer-core` / `tomcat-embed-core` case, with the actual finding
+  one of its dependencies. That's micrometer's declaration, not the
 counts observed at each scan scope), see
+  project's.
 [case-studies/platform-backend.md](../case-studies/platform-backend.md#the-starting-problem),
+- The project also declares `tomcat.version 11.0.22` directly.
 this page stays at the mechanism level; the case study is where the
+- A scanner reading `~/.m2` sees the POM-declared `8.5.100` and flags it
 evidence lives.
+  as vulnerable, a version the project never actually ships.
+- Maven itself resolves the conflict at build time and picks `11.0.22`.
+  `8.5.100` never ends up in the actual built application at all.
 
 ## How Maven resolves version conflicts
 
@@ -105,12 +126,3 @@ registry-side rate limiting (HTTP 429), which fails the tool run entirely,
 not just the scan quality. Scanning a pre-generated SBOM avoids this class
 of failure for the scan step itself. See
 [troubleshoot-registry-rate-limits.md](../how-to/troubleshoot-registry-rate-limits.md).
-
-## What an SBOM is, briefly
-
-An SBOM is a list of every software component and dependency in a
-project, the equivalent of an ingredients list for software.
-[CycloneDX](https://cyclonedx.org/) is the standard format used here, a
-structured schema (JSON in this setup) for representing that inventory
-consistently so tools like Trivy and OSV-Scanner can parse it reliably,
-regardless of which ecosystem or build tool produced it.
