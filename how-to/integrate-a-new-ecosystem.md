@@ -2,15 +2,23 @@
 
 This is the single, ecosystem-agnostic guide for wiring Container Scanning,
 SCA, and SAST into any repository, regardless of build tool or language.
-Maven and npm are two supported ecosystems, not the only two. Everything
-here is written so it applies identically to a Gradle service, a raw
-(package-manager-free) JavaScript app, or a Python project.
 
-If you're setting up a **Maven or npm** repo and just want the exact
-commands, jump straight to the [ecosystem matrix](#ecosystem-matrix) below.
-If you're adding support for an ecosystem that isn't in the matrix yet,
-read [Adding a new ecosystem](#adding-a-new-ecosystem-not-in-the-matrix)
-first.
+> **Maven and npm are two worked examples, not the only two supported
+> ecosystems.** They're the two the reference implementations
+> (`platform-backend`, `platform-ui`) actually run in production, so
+> they're the most thoroughly exercised. Gradle, raw JavaScript, Python,
+> and Go are documented in the same matrix below and are already
+> integrated the same way. Anything else, Rust, PHP, Ruby, .NET, or a
+> language not listed at all, plugs into the exact same three-step pattern,
+> see [Adding a new ecosystem](#adding-a-new-ecosystem-not-in-the-matrix).
+> This handbook is not tied to any one build tool.
+
+If you're setting up a repo in one of the **seven ecosystems already in the
+matrix** (Maven, Gradle, npm, raw JavaScript, Python, Go, Rust) and just
+want the exact commands, jump straight to the
+[ecosystem matrix](#ecosystem-matrix) below. If your ecosystem isn't there
+yet, read [Adding a new ecosystem](#adding-a-new-ecosystem-not-in-the-matrix)
+first, it's a short list of requirements, not a rewrite.
 
 ## What actually changes per ecosystem
 
@@ -320,6 +328,65 @@ resolved-vs-declared correctness property as the Maven and npm paths.
 
 </details>
 
+<details>
+<summary><strong>Rust (Cargo)</strong></summary>
+
+Included here as a worked example of adding an ecosystem **not** run by
+either reference implementation, to demonstrate that the pattern in this
+guide isn't limited to the six ecosystems above; see
+[Adding a new ecosystem](#adding-a-new-ecosystem-not-in-the-matrix) for the
+general steps this follows.
+
+**Dependency step:**
+```yaml
+- name: Cache Cargo registry
+  uses: actions/cache@v6
+  with:
+    path: |
+      ~/.cargo/registry
+      ~/.cargo/git
+    key: ${{ runner.os }}-cargo-v1-${{ hashFiles('**/Cargo.lock') }}
+    restore-keys: ${{ runner.os }}-cargo-v1-
+
+- name: Fetch Cargo dependencies
+  run: cargo fetch --locked
+```
+
+**SBOM tool:** [`cargo-cyclonedx`](https://github.com/CycloneDX/cyclonedx-rust-cargo),
+installed via `cargo install cargo-cyclonedx`.
+
+**SBOM command** (`setup-tools.sh` branch):
+```bash
+rust)
+  echo "Generating SBOM for Rust/Cargo project"
+  cargo install --quiet cargo-cyclonedx
+  cargo cyclonedx --format json --override-filename bom
+  mv Cargo.cdx.json target/bom.json
+  ;;
+```
+
+**Default SBOM output:** `<crate-name>.cdx.json` in the project root;
+normalize it to `target/bom.json` (via `--override-filename` plus a `mv`,
+as above) so `SBOM_PATH` doesn't need to vary per ecosystem in
+`sca_scan.py`.
+
+**Local run:**
+```bash
+cargo fetch --locked
+bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem rust
+python ci/sca_scan.py
+```
+
+`cargo cyclonedx` reads both `Cargo.lock` (the resolved graph) and `cargo
+metadata`, so, like the Maven and Go paths above, it reflects what's
+actually resolved and compiled, not just what's declared in `Cargo.toml`.
+`cargo fetch --locked` fails if `Cargo.lock` is out of sync with
+`Cargo.toml`, the same fail-fast behavior `npm ci` gives for
+`package-lock.json`, rather than silently re-resolving and drifting from
+what's committed.
+
+</details>
+
 ## Extending `setup-tools.sh`
 
 All six branches above plug into the same `case` statement already in
@@ -333,6 +400,7 @@ case "$SBOM_ECOSYSTEM" in
   raw-js)  npx --yes @cyclonedx/cdxgen -t js -o target/bom.json . ;;
   python)  cyclonedx-py requirements requirements.txt -o target/bom.json ;;
   go)      cyclonedx-gomod mod -json -output target/bom.json ;;
+  rust)    cargo cyclonedx --format json --override-filename bom && mv Cargo.cdx.json target/bom.json ;;
   none)    echo "No SBOM generation needed" ;;
   *)       echo "Unknown SBOM_ECOSYSTEM: $SBOM_ECOSYSTEM" >&2; exit 1 ;;
 esac
@@ -341,7 +409,14 @@ esac
 Adding an ecosystem not listed here means adding one more branch that ends
 with a CycloneDX file at `SBOM_PATH`. Nothing downstream (`sca_scan.py`,
 the gate model, suppression) needs to know or care which branch produced
-it.
+it. `rust` is included above precisely to make that point concrete: it was
+added the same way every other branch was, by following the five steps in
+[Adding a new ecosystem](#adding-a-new-ecosystem-not-in-the-matrix) below,
+not by changing anything else in the pipeline. PHP (Composer), Ruby
+(Bundler), and .NET (NuGet) all have their own CycloneDX generators too
+(see the [tool center](https://cyclonedx.org/tool-center/)) and would be
+added the same way; they're simply not worked examples in this handbook
+yet because neither reference implementation uses them.
 
 ## The generic `sca.yml` template
 

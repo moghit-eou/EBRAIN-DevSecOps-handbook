@@ -80,3 +80,94 @@ See [reference/pipeline-sca.md](../reference/pipeline-sca.md) for the
 resulting workflow, and
 [explanation/why-sboms.md](../explanation/why-sboms.md) for the general
 explanation this case study is the evidence for.
+
+## Code snapshot: `platform-backend`'s actual `sca.yml`
+
+This is a trimmed version of the real, currently-running workflow (Action
+`uses:` pins shortened for readability; the live file pins full commit
+SHAs, see [tool-installation-flags.md](../reference/tool-installation-flags.md)
+for why). It's the concrete instance of the
+[generic SCA template](../reference/pipeline-sca.md#generic-github-actions-template),
+with the Maven block filled in:
+
+```yaml
+name: Software Composition Analysis (SCA)
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 1' # weekly SCA scan, every Monday 02:00 UTC
+
+jobs:
+  sca:
+    name: Software Composition Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      SBOM_PATH: target/bom.json
+      TRIVY_IGNOREFILE: ci/suppress_trivy.yaml
+      OSV_IGNOREFILE: ci/suppress_osv_scanner.toml
+      TRIVY_SARIF_OUTPUT: trivy-platform-backend.sarif
+      OSV_SARIF_OUTPUT: osv-scanner-platform-backend.sarif
+      SCA_MERGED_SARIF_OUTPUT: SCA-platform-backend-merged.sarif
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.4'
+
+      # --- the Maven-specific block; this is the only part that differs from platform-ui's npm version ---
+      - name: Cache Maven packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.m2/repository # /.m2 alone is too broad and can cause cache corruption issues
+          key: ${{ runner.os }}-m2-v1-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2-v1-
+
+      - name: Resolve Maven dependencies
+        run: mvn dependency:resolve -q
+      # -------------------------------------------------------------------------------------------------------
+
+      - name: Setup tools
+        run: bash ci/setup-tools.sh --install-tool trivy,osv-scanner --sbom-ecosystem maven
+
+      - name: Run SCA tools
+        run: python ci/sca_scan.py
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ env.TRIVY_SARIF_OUTPUT }}
+          category: trivy-app
+
+      - name: Upload OSV Scanner SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ env.OSV_SARIF_OUTPUT }}
+          category: osv-scanner-app
+
+      - name: Upload SARIF artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sca-scan-sarif-report
+          path: ${{ env.SCA_MERGED_SARIF_OUTPUT }}
+          retention-days: 30
+```
+
+Compare this to
+[`platform-ui`'s npm version](platform-ui.md#code-snapshot-platform-uis-actual-scayml):
+every step outside the marked Maven block is byte-for-byte identical. This
+is the concrete proof, not just the claim, behind
+[integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md)'s
+statement that only the cache step and the install/resolve command change
+between ecosystems.

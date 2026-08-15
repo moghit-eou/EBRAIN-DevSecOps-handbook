@@ -80,6 +80,127 @@ python ci/container_scan.py --scan-type sast
 python ci/container_scan.py --scan-type sca --image app:local
 ```
 
+## Workflow steps
+
+Like SAST, `container-scan.yml` has no dependency-cache or dependency-
+install step, it operates on a built image and a `Dockerfile`, neither of
+which involves a package manager, so the file is identical for every
+ecosystem:
+
+| # | Step | Notes |
+|---|---|---|
+| 1 | `actions/checkout` | Standard checkout |
+| 2 | `actions/setup-python` | The orchestrator (`container_scan.py`) is Python |
+| 3 | `docker build -t $IMAGE_NAME .` | Builds the image once, reused by both scan types below |
+| 4 | `setup-tools.sh --install-tool trivy,osv-scanner,opengrep,hadolint,semgrep-rules` | Installs all four scanner binaries in one step |
+| 5 | `container_scan.py --scan-type sast` | Hadolint + OpenGrep against the `Dockerfile` |
+| 6 | `container_scan.py --scan-type sca` (`if: always()`) | Trivy + OSV-Scanner against the built image, runs even if step 5 failed |
+| 7 | `upload-sarif` (x4) | One category per tool output, see [SARIF upload categories](#sarif-upload-categories) |
+| 8 | `container_scan.py --merge-sarif ...` (`if: always()`) | Combines all four SARIF files into one artifact |
+| 9 | `upload-artifact` (`if: always()`) | Publishes the merged artifact, 30-day retention |
+
+
+## Generic GitHub Actions template
+
+This pipeline needs no ecosystem substitution, the same file works for a
+Java, npm, Python, or Go service, or anything else with a `Dockerfile`:
+
+```yaml
+name: Container Vulnerability Scanning
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 1'
+
+jobs:
+  container-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      IMAGE_NAME: <service>:testing
+      CONTAINER_SCAN_MERGED_SARIF_OUTPUT: container-scan-<service>-merged.sarif
+      TRIVY_IGNOREFILE: ci/suppress_trivy.yaml
+      OSV_IGNOREFILE: ci/suppress_osv_scanner.toml
+      TRIVY_SCA_SARIF_OUTPUT: sca-trivy-container.sarif
+      OSV_SCA_SARIF_OUTPUT: sca-osv-container.sarif
+      SEMGREP_CONFIG_RULESETS: semgrep-rules/dockerfile
+      OPENGREP_SAST_SARIF_OUTPUT: sast-opengrep-dockerfile.sarif
+      HADOLINT_SAST_SARIF_OUTPUT: sast-hadolint-dockerfile.sarif
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.4'
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.IMAGE_NAME }} .
+
+      - name: Setup tools
+        run: bash ci/setup-tools.sh --install-tool trivy,osv-scanner,opengrep,hadolint,semgrep-rules
+
+      - name: Run SAST scanning (Dockerfile)
+        run: python ci/container_scan.py --scan-type sast
+
+      - name: Run SCA scanning (image)
+        if: always()
+        run: python ci/container_scan.py --scan-type sca --image ${{ env.IMAGE_NAME }}
+
+      - uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: ${{ env.TRIVY_SCA_SARIF_OUTPUT }}
+          category: trivy-container-scanning
+
+      - uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: ${{ env.OSV_SCA_SARIF_OUTPUT }}
+          category: osv-scanner-container-scanning
+
+      - uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: ${{ env.OPENGREP_SAST_SARIF_OUTPUT }}
+          category: opengrep-sast
+
+      - uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: ${{ env.HADOLINT_SAST_SARIF_OUTPUT }}
+          category: hadolint-sast
+
+      - name: Merge all SARIF reports
+        if: always()
+        run: |
+          python ci/container_scan.py \
+            --merge-sarif "${{ env.TRIVY_SCA_SARIF_OUTPUT }}" "${{ env.OSV_SCA_SARIF_OUTPUT }}" "${{ env.OPENGREP_SAST_SARIF_OUTPUT }}" "${{ env.HADOLINT_SAST_SARIF_OUTPUT }}" \
+            --merge-output "${{ env.CONTAINER_SCAN_MERGED_SARIF_OUTPUT }}"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: container-scan-sarif-report
+          path: ${{ env.CONTAINER_SCAN_MERGED_SARIF_OUTPUT }}
+          retention-days: 30
+```
+
+> **Note on Action versions:** pin every `uses:` to a full commit SHA in a
+> real workflow rather than the floating `@v7`-style tags shown here for
+> readability, see [platform-ui.md](../case-studies/platform-ui.md) and
+> [platform-backend.md](../case-studies/platform-backend.md) for real,
+> SHA-pinned examples.
+>
+> **Ecosystem-independent by design.** This is the one pipeline of the
+> three that never needs an ecosystem-specific block, whatever language or
+> build tool produced the `Dockerfile`, this file doesn't change. If your
+> project doesn't containerize (a library with no image, for example), this
+> pipeline simply doesn't apply, run SCA and SAST only.
+
 ## SARIF upload categories
 
 Each SARIF file uploads under its own category, to avoid GitHub's

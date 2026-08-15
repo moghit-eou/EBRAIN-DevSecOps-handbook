@@ -28,7 +28,7 @@ Windows.
 | Flag | Values | Purpose |
 |---|---|---|
 | `--install-tool` | comma-separated list, or `all` | Which scanner binaries to install |
-| `--sbom-ecosystem` | `maven`, `gradle`, `npm`, `raw-js`, `python`, `go`, `none` | Which SBOM generator to run after tool installation, see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md) |
+| `--sbom-ecosystem` | `maven`, `gradle`, `npm`, `raw-js`, `python`, `go`, `rust`, `none`, or a value you add yourself | Which SBOM generator to run after tool installation, see [integrate-a-new-ecosystem.md](../how-to/integrate-a-new-ecosystem.md) |
 
 ## Installable tools
 
@@ -90,7 +90,15 @@ downstream error.
 | `raw-js` | `npx --yes @cyclonedx/cdxgen -t js -o target/bom.json .` |
 | `python` | `cyclonedx-py requirements requirements.txt -o target/bom.json` |
 | `go` | `cyclonedx-gomod mod -json -output target/bom.json` |
+| `rust` | `cargo cyclonedx --format json --override-filename bom` (then normalized to `target/bom.json`) |
 | `none` | No SBOM generated |
+
+This table is not a hard ceiling on what the pipeline supports, it's the
+set of `case` branches already written into `setup-tools.sh`. Adding a
+value not listed here (PHP, Ruby, .NET, or anything else with a CycloneDX
+generator) is a one-branch addition, not a change to this flag's design,
+see
+[Adding a new ecosystem](../how-to/integrate-a-new-ecosystem.md#adding-a-new-ecosystem-not-in-the-matrix).
 
 `container-scan.yml` scans the built image directly and needs no SBOM, so
 it always uses `--sbom-ecosystem none` (or omits the flag). Full
