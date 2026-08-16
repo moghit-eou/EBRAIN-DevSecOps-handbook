@@ -202,19 +202,6 @@ This is why `container-scan.yml` calls this one script three times in
 the same job: once with `--scan-type sast`, once with `--scan-type sca`,
 once with only `--merge-sarif` and no `--scan-type`.
 
-## Where the three files overlap
-
-| Function | `sast_scan.py` | `sca_scan.py` | `container_scan.py` | Overlap |
-|---|---|---|---|---|
-| `run_trivy()` | | yes | yes | Same shape, different target: an SBOM file vs an image name |
-| `run_osv_scanner()` | | yes | yes | Identical logic in both, including the exit code `1` to `0` change |
-| `merge_sarifs()` | | yes | yes | `sca_scan.py`'s version takes no arguments and merges a fixed pair. `container_scan.py`'s version takes any list of paths. Same merge logic inside both |
-| `run_opengrep()` | yes | | yes | Same two-pass pattern, different `--include` flag and rule set |
-| SCA scanning logic (loop over tools, call `evaluate()`) | | in `main()` | in its own function | Same logic, see [How SCA scanning is handled](#how-sca-scanning-is-handled) |
-| SAST exit code mapping (`0` to `PASSED`, `1` to `FAILED`, else `ERROR`) | in `main()` | | in its own function | Same mapping, applied once in `sast_scan.py`, applied per tool in a loop in `container_scan.py`, see [How SAST scanning is handled](#how-sast-scanning-is-handled) |
-| `run_hadolint()` | | | yes | Unique to `container_scan.py`. A linter, not a SAST tool |
-| CLI argument parsing | | | yes | Unique to `container_scan.py`. The other two scripts take no command line arguments, everything comes from environment variables |
-
 In short, `container_scan.py` is not a fully separate script. It reuses
 `sca_scan.py`'s SCA logic and `sast_scan.py`'s SAST logic, plus a linter
 call and a more general `merge_sarifs()`. If you change shared behavior,
