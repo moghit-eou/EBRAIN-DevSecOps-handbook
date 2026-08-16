@@ -44,21 +44,30 @@ format, the rest of the pipeline is identical for every language.
 ## Ecosystem matrix
 
 Each block below is copy-paste-ready: the dependency step, the SBOM
-command, the cache configuration, and the `setup-tools.sh` case branch for
-that ecosystem. Expand the one you need.
+command, and the `setup-tools.sh` case branch for that ecosystem. Expand
+the one you need.
+
+Every ecosystem's cache step is the same
+[canonical `actions/cache` snippet](../reference/pipeline-sca.md#caching),
+only the `path` and the lockfile glob in the `key` change; it isn't
+repeated in full for each ecosystem below, only the two values are:
+
+| Ecosystem | Cache `path` | Lockfile hashed in the `key` |
+|---|---|---|
+| Maven | `~/.m2/repository` | `**/pom.xml` |
+| Gradle | `~/.gradle/caches`, `~/.gradle/wrapper` | `**/*.gradle*`, `**/gradle-wrapper.properties` |
+| npm | `~/.npm` | `**/package-lock.json` |
+| Raw JavaScript | *(none, nothing to cache)* | — |
+| Python | `~/.cache/pip` | `**/requirements*.txt`, `**/poetry.lock`, `**/Pipfile.lock` |
+| Go | `~/go/pkg/mod`, `~/.cache/go-build` | `**/go.sum` |
+| Rust (Cargo) | `~/.cargo/registry`, `~/.cargo/git` | `**/Cargo.lock` |
 
 <details>
 <summary><strong>Maven</strong></summary>
 
-**Dependency resolve step** (`sca.yml`, before `setup-tools.sh`):
+**Dependency resolve step** (`sca.yml`, before `setup-tools.sh`): restore
+the cache using the path/key from the table above, then:
 ```yaml
-- name: Cache Maven packages
-  uses: actions/cache@v6
-  with:
-    path: ~/.m2/repository   # /.m2 alone is too broad; risks cache corruption
-    key: ${{ runner.os }}-m2-v1-${{ hashFiles('**/pom.xml') }}
-    restore-keys: ${{ runner.os }}-m2-v1-
-
 - name: Resolve Maven dependencies
   run: mvn dependency:resolve -q
 ```
@@ -93,17 +102,9 @@ why this distinction matters.
 <details>
 <summary><strong>Gradle</strong></summary>
 
-**Dependency resolve step:**
+**Dependency resolve step:** restore the cache using the path/key from
+the table above, then:
 ```yaml
-- name: Cache Gradle packages
-  uses: actions/cache@v6
-  with:
-    path: |
-      ~/.gradle/caches
-      ~/.gradle/wrapper
-    key: ${{ runner.os }}-gradle-v1-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-    restore-keys: ${{ runner.os }}-gradle-v1-
-
 - name: Resolve Gradle dependencies
   run: ./gradlew dependencies --write-locks -q
 ```
@@ -153,15 +154,9 @@ resolved graph reflects what's actually shipped.
 <details>
 <summary><strong>NPM</strong></summary>
 
-**Dependency install step:**
+**Dependency install step:** restore the cache using the path/key from
+the table above, then:
 ```yaml
-- name: Cache npm packages
-  uses: actions/cache@v6
-  with:
-    path: ~/.npm
-    key: ${{ runner.os }}-npm-v1-${{ hashFiles('**/package-lock.json') }}
-    restore-keys: ${{ runner.os }}-npm-v1-
-
 - name: Install dependencies
   run: npm ci
 ```
@@ -192,7 +187,7 @@ fails immediately on a lockfile/manifest mismatch, and never rewrites the
 lockfile. `cyclonedx-npm` walks the installed `node_modules/` tree, so an
 install done with `npm install` can make the SBOM reflect a different
 dependency set than what's actually locked. See
-[troubleshoot-sbom-generation-errors.md](troubleshoot-sbom-generation-errors.md#npm-elsproblems--peer-dependency-errors-during-sbom-generation).
+[troubleshooting.md](troubleshooting.md#npm-elsproblems--peer-dependency-errors-during-sbom-generation).
 
 </details>
 
@@ -240,15 +235,9 @@ substitute for adopting npm if that's an option.
 <details>
 <summary><strong>Python</strong></summary>
 
-**Dependency install step:**
+**Dependency install step:** restore the cache using the path/key from
+the table above, then:
 ```yaml
-- name: Cache pip packages
-  uses: actions/cache@v6
-  with:
-    path: ~/.cache/pip
-    key: ${{ runner.os }}-pip-v1-${{ hashFiles('**/requirements*.txt', '**/poetry.lock', '**/Pipfile.lock') }}
-    restore-keys: ${{ runner.os }}-pip-v1-
-
 - name: Install dependencies
   run: pip install -r requirements.txt   # or: poetry install --no-root
 ```
@@ -288,17 +277,9 @@ resolved-vs-declared failure mode as reading raw Maven POMs, see
 <details>
 <summary><strong>Go</strong></summary>
 
-**Dependency step:**
+**Dependency step:** restore the cache using the path/key from the table
+above, then:
 ```yaml
-- name: Cache Go modules
-  uses: actions/cache@v6
-  with:
-    path: |
-      ~/go/pkg/mod
-      ~/.cache/go-build
-    key: ${{ runner.os }}-go-v1-${{ hashFiles('**/go.sum') }}
-    restore-keys: ${{ runner.os }}-go-v1-
-
 - name: Download Go modules
   run: go mod download
 ```
@@ -337,17 +318,9 @@ guide isn't limited to the six ecosystems above; see
 [Adding a new ecosystem](#adding-a-new-ecosystem-not-in-the-matrix) for the
 general steps this follows.
 
-**Dependency step:**
+**Dependency step:** restore the cache using the path/key from the table
+above, then:
 ```yaml
-- name: Cache Cargo registry
-  uses: actions/cache@v6
-  with:
-    path: |
-      ~/.cargo/registry
-      ~/.cargo/git
-    key: ${{ runner.os }}-cargo-v1-${{ hashFiles('**/Cargo.lock') }}
-    restore-keys: ${{ runner.os }}-cargo-v1-
-
 - name: Fetch Cargo dependencies
   run: cargo fetch --locked
 ```
@@ -449,13 +422,10 @@ jobs:
         with:
           python-version: '3.14.4'
 
-      # --- replace this block with the matching ecosystem block above ---
-      - name: Cache dependencies
-        uses: actions/cache@v6
-        with:
-          path: <ecosystem cache path>
-          key: ${{ runner.os }}-<ecosystem>-v1-${{ hashFiles('<lockfile glob>') }}
-          restore-keys: ${{ runner.os }}-<ecosystem>-v1-
+      # --- ecosystem-specific block: cache step (canonical shape in pipeline-sca.md#caching) + install command ---
+      # - name: Cache dependencies
+      #   uses: actions/cache@v6
+      #   with: { path: <ecosystem cache path>, key: ..., restore-keys: ... }
 
       - name: Install / resolve dependencies
         run: <ecosystem install command>

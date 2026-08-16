@@ -125,4 +125,4 @@ Central). Under repeated CI runs from the same IP range, this can trigger
 registry-side rate limiting (HTTP 429), which fails the tool run entirely,
 not just the scan quality. Scanning a pre-generated SBOM avoids this class
 of failure for the scan step itself. See
-[troubleshoot-registry-rate-limits.md](../how-to/troubleshoot-registry-rate-limits.md).
+[troubleshooting.md](../how-to/troubleshooting.md).

@@ -85,17 +85,20 @@ no dependency on a build tool or package manager.
 
 `sast.yml` is the shortest of the three pipelines: it has no
 ecosystem-specific step at all, only a language-specific *value*
-(`SEMGREP_CONFIG_RULESETS`), so the workflow file itself never changes
-between repositories, only the `env:` block does:
+(`SEMGREP_CONFIG_RULESETS`), so the sequence below never changes between
+repositories, only the ruleset value does. The steps are described in
+vendor-neutral terms; the
+[generic GitHub Actions template](#generic-github-actions-template) below
+is one concrete implementation of them:
 
 | # | Step | Ecosystem-specific? | Notes |
 |---|---|---|---|
-| 1 | `actions/checkout` | No | Standard checkout |
-| 2 | `actions/setup-python` | No | The orchestrator (`sast_scan.py`) is Python |
-| 3 | `setup-tools.sh --install-tool opengrep,semgrep-rules` | No | Installs OpenGrep and clones the pinned `semgrep-rules` ruleset |
-| 4 | `python ci/sast_scan.py` (report run) | No | Writes the full SARIF report, every finding, any severity |
-| 5 | `python ci/sast_scan.py` (gate run) | No | Same scan, `--severity=ERROR --error`, decides pass/fail |
-| 6 | `upload-sarif` + `upload-artifact` | No | One category (`semgrep-app`), plus the retained artifact |
+| 1 | Check out the repository | No | Standard source checkout |
+| 2 | Set up a Python runtime | No | The orchestrator (`sast_scan.py`) is Python |
+| 3 | Install scanner tooling (`setup-tools.sh --install-tool opengrep,semgrep-rules`) | No | Installs OpenGrep and clones the pinned `semgrep-rules` ruleset |
+| 4 | Run the SAST scan, report mode (`python ci/sast_scan.py`) | No | Writes the full SARIF report, every finding, any severity |
+| 5 | Run the SAST scan, gate mode (`python ci/sast_scan.py`) | No | Same scan, `--severity=ERROR --error`, decides pass/fail |
+| 6 | Publish SARIF results and the report artifact | No | One category (`semgrep-app`), plus the retained artifact |
 
 There is no dependency-install step and no cache-restore step in this
 pipeline, OpenGrep reads source files directly; it never needs a resolved
@@ -103,9 +106,10 @@ dependency tree the way the SCA pipeline's SBOM generation does.
 
 ## Generic GitHub Actions template
 
-Unlike the SCA and Container Scanning pipelines, this template needs no
-ecosystem substitution at all, only the ruleset value changes per
-repository:
+This is a concrete, generic example of the vendor-neutral steps above,
+expressed as a GitHub Actions workflow. Unlike the SCA and Container
+Scanning pipelines, this template needs no ecosystem substitution at all,
+only the ruleset value changes per repository:
 
 ```yaml
 name: Static Application Security Testing (SAST)

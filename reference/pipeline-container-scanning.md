@@ -84,26 +84,33 @@ python ci/container_scan.py --scan-type sca --image app:local
 
 Like SAST, `container-scan.yml` has no dependency-cache or dependency-
 install step, it operates on a built image and a `Dockerfile`, neither of
-which involves a package manager, so the file is identical for every
-ecosystem:
+which involves a package manager, so the sequence below is identical for
+every ecosystem. The steps themselves are described in vendor-neutral
+terms, since nothing here is specific to GitHub Actions; the
+[generic GitHub Actions template](#generic-github-actions-template) below
+is one concrete implementation of these same steps, not the only way to
+run them:
 
 | # | Step | Notes |
 |---|---|---|
-| 1 | `actions/checkout` | Standard checkout |
-| 2 | `actions/setup-python` | The orchestrator (`container_scan.py`) is Python |
-| 3 | `docker build -t $IMAGE_NAME .` | Builds the image once, reused by both scan types below |
-| 4 | `setup-tools.sh --install-tool trivy,osv-scanner,opengrep,hadolint,semgrep-rules` | Installs all four scanner binaries in one step |
-| 5 | `container_scan.py --scan-type sast` | Hadolint + OpenGrep against the `Dockerfile` |
-| 6 | `container_scan.py --scan-type sca` (`if: always()`) | Trivy + OSV-Scanner against the built image, runs even if step 5 failed |
-| 7 | `upload-sarif` (x4) | One category per tool output, see [SARIF upload categories](#sarif-upload-categories) |
-| 8 | `container_scan.py --merge-sarif ...` (`if: always()`) | Combines all four SARIF files into one artifact |
-| 9 | `upload-artifact` (`if: always()`) | Publishes the merged artifact, 30-day retention |
+| 1 | Check out the repository | Standard source checkout |
+| 2 | Set up a Python runtime | The orchestrator (`container_scan.py`) is Python |
+| 3 | Build the container image (`docker build -t $IMAGE_NAME .`) | Builds the image once, reused by both scan types below |
+| 4 | Install scanner tooling (`setup-tools.sh --install-tool trivy,osv-scanner,opengrep,hadolint,semgrep-rules`) | Installs all four scanner binaries in one step |
+| 5 | Run the Dockerfile SAST scan (`container_scan.py --scan-type sast`) | Hadolint + OpenGrep against the `Dockerfile` |
+| 6 | Run the image SCA scan (`container_scan.py --scan-type sca`), always | Trivy + OSV-Scanner against the built image, runs even if step 5 failed |
+| 7 | Publish SARIF results to the code-scanning tool (x4) | One category per tool output, see [SARIF upload categories](#sarif-upload-categories) |
+| 8 | Merge all SARIF reports (`container_scan.py --merge-sarif ...`), always | Combines all four SARIF files into one artifact |
+| 9 | Publish the merged report as a CI artifact, always | Publishes the merged artifact, 30-day retention |
 
 
 ## Generic GitHub Actions template
 
-This pipeline needs no ecosystem substitution, the same file works for a
-Java, npm, Python, or Go service, or anything else with a `Dockerfile`:
+This is a concrete, generic example of the vendor-neutral steps above,
+expressed as a GitHub Actions workflow. This pipeline needs no ecosystem
+substitution, the same file works for a Java, npm, Python, or Go service,
+or anything else with a `Dockerfile`; on a different CI runner, the same
+nine steps apply, only the workflow syntax changes:
 
 ```yaml
 name: Container Vulnerability Scanning

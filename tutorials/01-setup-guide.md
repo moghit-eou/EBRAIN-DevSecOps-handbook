@@ -208,7 +208,5 @@ see [gate-status-cvss.md](../reference/gate-status-cvss.md) and
 * If a finding is a false positive, see
   [suppress-a-finding.md](../how-to/suppress-a-finding.md).
 * If you hit a package-registry rate limit while resolving dependencies,
-  see
-  [troubleshoot-registry-rate-limits.md](../how-to/troubleshoot-registry-rate-limits.md).
-* If SBOM generation itself fails, see
-  [troubleshoot-sbom-generation-errors.md](../how-to/troubleshoot-sbom-generation-errors.md).
+  or SBOM generation itself fails, see
+  [troubleshooting.md](../how-to/troubleshooting.md).
