@@ -1,132 +1,222 @@
 # Reference: Python Orchestrators
 
 The three pipelines (SAST, SCA, Container Scanning) are each driven by a
-small, dependency-light Python script living under `ci/`. This page
-documents `sast_scan.py`, `sca_scan.py`, and `container_scan.py`
-themselves, purely as Python: their structure, their functions, and how
-they compose. For what invokes them (the GitHub Actions workflow files)
-see [pipeline-sast.md](pipeline-sast.md), [pipeline-sca.md](pipeline-sca.md),
-and [pipeline-container-scanning.md](pipeline-container-scanning.md). For
-the shared SARIF-parsing gate logic all three call into, see
-[gate-status-cvss.md](gate-status-cvss.md) and
-[gate-status-rule-severity.md](gate-status-rule-severity.md), which cover
-`parse_sarif.py`.
+small Python script under `ci/`: `sast_scan.py`, `sca_scan.py`, and
+`container_scan.py`. This page shows their functions, how SCA scanning
+and SAST scanning are each handled, and where the three files overlap.
 
-## Shared shape
+## Functions
 
-All three orchestrators are single-file scripts with no third-party
-dependencies, only the standard library (`subprocess`, `os`, `sys`,
-`logging`, `json`), plus a same-package import of `parse_sarif` for the
-two that need a gate decision. Each follows the same pattern:
+### `sast_scan.py`
 
-1. A small set of ANSI color constants (`GREEN`, `RED`, `RESET`, `BOLD`,
-   `YELLOW`) for readable CI log output.
-2. `logging.basicConfig(format='%(message)s')`, a bare message format
-   with no timestamp, since the CI runner already timestamps every log
-   line, a second timestamp from Python would just be noise.
-3. A block of module-level configuration read from environment variables
-   via `os.getenv(NAME, default)`, so the same script runs unmodified
-   across `platform-backend` and `platform-ui`, only the environment
-   differs.
-4. One `run_<tool>()` function per external tool, each building an
-   argument list and calling `subprocess.run(cmd).returncode`.
-5. A summary block that maps tool exit codes and/or gate evaluations to a
-   `PASSED` / `WARNING` / `FAILED` / `ERROR` status, prints a formatted
-   summary, and calls `sys.exit(1)` if anything failed.
+```python
+def run_opengrep():
+    base_cmd = ["opengrep", "scan"] + \
+        [f"--config {config}" for config in SEMGREP_CONFIG_RULESETS] + \
+        [f"--exclude={pattern}" for pattern in OPENGREP_EXCLUDE]
 
-None of the three scripts parses CLI flags for its core scan logic
-(`container_scan.py` is the one exception, see below); ecosystem or
-scan-type selection happens entirely through environment variables and,
-for `container_scan.py`, one `argparse` router.
+    report_cmd = (base_cmd + ["--sarif", "--output", OPENGREP_SARIF_OUTPUT])
+    subprocess.run(" ".join(report_cmd).split())
 
-## `sast_scan.py`
+    gate_cmd = (base_cmd + ["--severity=ERROR", "--error"])
+    return subprocess.run(" ".join(gate_cmd).split()).returncode
+```
 
-The simplest of the three. One function, `run_opengrep()`, runs OpenGrep
-**twice** with the same base command and different flags:
+Runs OpenGrep twice with the same base command: once to write a full
+report, once with `--severity=ERROR --error` to check the gate. Only the
+gate run's exit code matters for pass or fail.
 
-- **Report run:** `--sarif --output $OPENGREP_SARIF_OUTPUT`, writes every
-  finding regardless of severity, for the GitHub Security tab.
-- **Gate run:** `--severity=ERROR --error`, considers only `ERROR`-level
-  findings, and its exit code is what `main()` maps to
-  `PASSED` / `FAILED` / `ERROR`.
+### `sca_scan.py`
 
-Configuration read from the environment: `SEMGREP_CONFIG_RULESETS`
-(space-separated rule packs, `.split()` into a list),
-`OPENGREP_EXCLUDE` (space-separated glob patterns, also split into a
-list), and `OPENGREP_SARIF_OUTPUT` (a single path).
+```python
+def run_trivy():
+    cmd = ["trivy", "sbom", SBOM_PATH, "--format", "sarif",
+           "--ignorefile", TRIVY_IGNOREFILE, "--output", TRIVY_SARIF_OUTPUT]
+    return subprocess.run(cmd).returncode
 
-`main()`'s status logic: exit code `0` → `PASSED`; `1` → `FAILED`; anything
-else → `ERROR`. If the expected SARIF file is missing from disk after the
-run, `main()` forces the status to `ERROR` regardless of exit code, since
-a missing report means the tool didn't actually run.
+def run_osv_scanner():
+    cmd = ["osv-scanner", "scan", "source", "--lockfile", SBOM_PATH,
+           "--config", OSV_IGNOREFILE, "--format", "sarif",
+           "--output-file", OSV_SARIF_OUTPUT]
+    exit_code = subprocess.run(cmd).returncode
+    if exit_code == 1:
+        return 0  # 1 means "found something," not "tool failed"
+    return exit_code
 
-## `sca_scan.py`
+def merge_sarifs():
+    merged = {"$schema": "...", "version": "2.1.0", "runs": []}
+    for path in (TRIVY_SARIF_OUTPUT, OSV_SARIF_OUTPUT):
+        if os.path.exists(path):
+            with open(path) as f:
+                merged["runs"].extend(json.load(f, strict=False).get("runs", []))
+    with open(SCA_MERGED_SARIF_OUTPUT, "w") as f:
+        json.dump(merged, f)
+```
 
-Structurally the most representative of the three. Three functions:
+`run_trivy()` scans the SBOM file directly. `run_osv_scanner()` does the
+same but always turns exit code `1` into `0`, since the real pass or fail
+decision comes later, from `evaluate()`, not from this exit code.
+`merge_sarifs()` concatenates both tools' SARIF `runs` arrays into one
+file, for the combined artifact. It plays no part in the gate decision.
 
-- `run_trivy()` — runs `trivy sbom $SBOM_PATH ...`, returns the raw exit
-  code.
-- `run_osv_scanner()` — runs `osv-scanner scan source --lockfile
-  $SBOM_PATH ...`. Exit code `1` from OSV-Scanner means "vulnerabilities
-  found," which this function deliberately remaps to `0` so a finding
-  doesn't short-circuit the pipeline before the SARIF-based gate runs;
-  any other non-zero code passes through unchanged.
-- `merge_sarifs()` — reads both tools' SARIF files (skipping and warning
-  on any that don't exist), concatenates their `runs` arrays into one
-  SARIF document, and writes it to `SCA_MERGED_SARIF_OUTPUT`. This merged
-  file is an artifact for humans; it is not what the gate evaluates.
+### `container_scan.py`
 
-`main()` builds two dicts, `tools` (name → function) and `sarif_files`
-(name → expected output path), then:
+`run_trivy()` and `run_osv_scanner()` here are the same as in
+`sca_scan.py`, just pointed at an image instead of an SBOM file:
 
-1. Calls every tool function, flags `ERROR` if a tool exits non-zero but
-   still produced a SARIF file (an inconsistent state worth flagging on
-   its own).
-2. Calls `merge_sarifs()`.
-3. For each tool not already flagged `ERROR`, calls `parse_sarif.evaluate()`
-   on its SARIF file and maps the result to `PASSED` / `WARNING` /
-   `FAILED` per the CVSS thresholds (see
-   [gate-status-cvss.md](gate-status-cvss.md)).
-4. Prints a per-tool summary and exits `1` if any tool's status is not
-   `PASSED`.
+```python
+def run_trivy():
+    cmd = ["trivy", "image", IMAGE_NAME, "--format", "sarif",
+           "--ignorefile", TRIVY_IGNOREFILE, "--output", TRIVY_SCA_SARIF_OUTPUT]
+    return subprocess.run(cmd).returncode
 
-## `container_scan.py`
+def run_osv_scanner():
+    cmd = ["osv-scanner", "scan", "image", IMAGE_NAME,
+           "--config", OSV_IGNOREFILE, "--format", "sarif",
+           "--output-file", OSV_SCA_SARIF_OUTPUT]
+    exit_code = subprocess.run(cmd).returncode
+    if exit_code == 1:
+        return 0
+    return exit_code
+```
 
-The largest of the three, because it does the job of both of the others
-against a Docker image and a `Dockerfile` instead of source or an SBOM.
-It's the only one with an `argparse` CLI (`-s/--scan-type`, `-i/--image`,
-`--merge-sarif`, `--merge-output`), since a single invocation needs to
-pick between two unrelated code paths:
+Two more functions run against the `Dockerfile` instead of the image,
+one linter and one SAST scanner:
 
-- `handle_sca()` — the same shape as `sca_scan.py`'s `main()` body
-  (Trivy + OSV-Scanner, CVSS-score gate), but against `trivy image
-  $IMAGE_NAME` and `osv-scanner scan image $IMAGE_NAME` instead of an
-  SBOM file.
-- `handle_sast()` — runs Hadolint and OpenGrep against the `Dockerfile`
-  (`opengrep scan --include=Dockerfile`), and maps each tool's own exit
-  code directly to a status (no shared gate function here, since both
-  tools' exit codes are already a direct pass/fail signal, see
-  [gate-status-rule-severity.md](gate-status-rule-severity.md)).
-- `merge_sarifs(sarif_paths, output_path)` — a generalized version of
-  `sca_scan.py`'s merge function, taking an arbitrary list of SARIF paths
-  instead of a fixed pair, since `container-scan.yml` needs to merge four
-  files (two SCA, two SAST) rather than two.
+```python
+def run_hadolint():
+    cmd = ["hadolint", "Dockerfile", "--failure-threshold", "error", "--format", "sarif"]
+    with open(HADOLINT_SAST_SARIF_OUTPUT, "w") as f:
+        result = subprocess.run(cmd, stdout=f)
+    return result.returncode
 
-`main()` parses arguments, dispatches to `handle_sast()` or `handle_sca()`
-based on `--scan-type`, optionally overrides the module-level
-`IMAGE_NAME` via `global IMAGE_NAME` if `--image` was passed, and, if
-`--merge-sarif` paths were given, calls `merge_sarifs()` as a separate
-step at the end. This is why `container-scan.yml` invokes the script
-three times in one job (`--scan-type sast`, `--scan-type sca`, then
-`--merge-sarif ...`), see
-[pipeline-container-scanning.md](pipeline-container-scanning.md#execution-order).
+def run_opengrep():
+    base_cmd = ["opengrep", "scan", "--include=Dockerfile", "-q"] + \
+        [f"--config {config}" for config in SEMGREP_CONFIG_RULESETS]
+    report_cmd = base_cmd + ["--sarif", "--output", OPENGREP_SAST_SARIF_OUTPUT]
+    subprocess.run(" ".join(report_cmd).split())
+    gate_cmd = base_cmd + ["--severity=ERROR", "--error"]
+    return subprocess.run(" ".join(gate_cmd).split()).returncode
+```
 
-## What's deliberately not in any of these scripts
+`run_hadolint()` is a Dockerfile linter, it checks for bad Dockerfile
+practices, not for vulnerable code patterns. It is not a SAST tool.
+`run_opengrep()` is the actual SAST tool here, the same rule-based static
+analysis used in `sast_scan.py`, just scoped to the `Dockerfile` with
+`--include=Dockerfile`. The pipeline runs both together and gates on
+both, but they are two different kinds of check.
 
-None of the three scripts knows anything about the calling CI system.
-There is no GitHub-specific API call, no `GITHUB_*` environment variable
-read anywhere in any of them, every input arrives as a generic
-environment variable or CLI flag. That's what makes it possible to run
-any of them identically outside GitHub Actions, on any CI runner with
-`python3` and the relevant scanner binaries on `PATH`, or directly on a
-developer machine for local triage.
+`merge_sarifs()` here takes a list of paths instead of a fixed pair, so
+it can combine any number of SARIF files, not just two:
+
+```python
+def merge_sarifs(sarif_paths, output_path):
+    merged = {"$schema": "...", "version": "2.1.0", "runs": []}
+    for path in sarif_paths:
+        if os.path.exists(path):
+            with open(path) as f:
+                merged["runs"].extend(json.load(f, strict=False).get("runs", []))
+    with open(output_path, "w") as f:
+        json.dump(merged, f)
+```
+
+## How SCA scanning is handled
+
+This same sequence runs inside `sca_scan.py`'s `main()`, and again inside
+`container_scan.py` (there it scans an image instead of an SBOM, the
+steps are otherwise identical):
+
+```
+for each tool (trivy, osv-scanner):
+    run the tool, get exit_code
+    if exit_code is not 0 but the tool still wrote a SARIF file:
+        mark that tool ERROR (inconsistent, worth flagging on its own)
+
+merge_sarifs()   # combined artifact only, not used for the gate
+
+for each tool not already marked ERROR:
+    if its SARIF file is missing: mark ERROR
+    else: evaluate() the SARIF file
+        CVSS >= 8.0 found  -> FAILED
+        5.0 <= CVSS < 8.0  -> WARNING
+        nothing >= 5.0     -> PASSED
+
+print the summary
+if any tool is FAILED or ERROR: exit with code 1
+```
+
+## How SAST scanning is handled
+
+In `sast_scan.py`, only OpenGrep runs, so this logic applies once:
+
+```
+run OpenGrep, get exit_code
+if exit_code is 0: status = PASSED
+if exit_code is 1: status = FAILED
+otherwise: status = ERROR
+
+if the SARIF file was not written: status = ERROR (tool did not run)
+
+print the summary
+if status is ERROR or FAILED: exit with code 1
+```
+
+In `container_scan.py`, the same exit code mapping applies, but to two
+tools instead of one, Hadolint (linting) and OpenGrep (SAST), run in a
+loop:
+
+```
+for each tool (hadolint, opengrep):
+    run the tool, get exit_code
+    if exit_code is 0: status = PASSED
+    if exit_code is 1: status = FAILED
+    otherwise: status = ERROR
+
+print the summary
+if any tool is not PASSED: exit with code 1
+```
+
+Hadolint and OpenGrep are gated together here for practical reasons, both
+are cheap checks against the same `Dockerfile`, but they are not the same
+kind of tool. Only OpenGrep is SAST; Hadolint is a linter.
+
+## How `container_scan.py` routes between them
+
+`container_scan.py` is the only one of the three scripts with a command
+line interface. Its `main()` picks between the SCA logic and the SAST
+logic above based on a flag, instead of a script only ever doing one
+thing:
+
+```
+parse CLI flags: --scan-type (sast or sca), --image, --merge-sarif, --merge-output
+
+if --scan-type is sast: run the SAST scanning steps above
+if --scan-type is sca:
+    if --image was given, use it as the image name
+    run the SCA scanning steps above
+
+if --merge-sarif paths were given: call merge_sarifs() and stop
+```
+
+This is why `container-scan.yml` calls this one script three times in
+the same job: once with `--scan-type sast`, once with `--scan-type sca`,
+once with only `--merge-sarif` and no `--scan-type`.
+
+## Where the three files overlap
+
+| Function | `sast_scan.py` | `sca_scan.py` | `container_scan.py` | Overlap |
+|---|---|---|---|---|
+| `run_trivy()` | | yes | yes | Same shape, different target: an SBOM file vs an image name |
+| `run_osv_scanner()` | | yes | yes | Identical logic in both, including the exit code `1` to `0` change |
+| `merge_sarifs()` | | yes | yes | `sca_scan.py`'s version takes no arguments and merges a fixed pair. `container_scan.py`'s version takes any list of paths. Same merge logic inside both |
+| `run_opengrep()` | yes | | yes | Same two-pass pattern, different `--include` flag and rule set |
+| SCA scanning logic (loop over tools, call `evaluate()`) | | in `main()` | in its own function | Same logic, see [How SCA scanning is handled](#how-sca-scanning-is-handled) |
+| SAST exit code mapping (`0` to `PASSED`, `1` to `FAILED`, else `ERROR`) | in `main()` | | in its own function | Same mapping, applied once in `sast_scan.py`, applied per tool in a loop in `container_scan.py`, see [How SAST scanning is handled](#how-sast-scanning-is-handled) |
+| `run_hadolint()` | | | yes | Unique to `container_scan.py`. A linter, not a SAST tool |
+| CLI argument parsing | | | yes | Unique to `container_scan.py`. The other two scripts take no command line arguments, everything comes from environment variables |
+
+In short, `container_scan.py` is not a fully separate script. It reuses
+`sca_scan.py`'s SCA logic and `sast_scan.py`'s SAST logic, plus a linter
+call and a more general `merge_sarifs()`. If you change shared behavior,
+for example how OSV-Scanner's exit code is handled, check all three
+files, since the same logic exists in more than one place.
