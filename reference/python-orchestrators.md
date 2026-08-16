@@ -207,3 +207,93 @@ In short, `container_scan.py` is not a fully separate script. It reuses
 call and a more general `merge_sarifs()`. If you change shared behavior,
 for example how OSV-Scanner's exit code is handled, check all three
 files, since the same logic exists in more than one place.
+
+## SARIF structure
+ 
+SCA tools (Trivy, OSV-Scanner) write their
+output as SARIF, a JSON format. A SARIF file has one or more `runs`, and
+each run has two parts that matter here: `tool.driver.rules`, the list
+of rule definitions, and `results`, the list of actual findings. A
+trimmed example:
+ 
+```json
+{
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "rules": [
+            {
+              "id": "CVE-2024-12345",
+              "properties": { "security-severity": "9.1" }
+            }
+          ]
+        }
+      },
+      "results": [
+        { "ruleId": "CVE-2024-12345" }
+      ]
+    }
+  ]
+}
+```
+ 
+A rule holds the severity score, a `security-severity` property on the
+matching entry in `tool.driver.rules`. A result only holds a `ruleId`,
+it does not repeat the score. To find out how severe a specific finding
+is, you have to look up its `ruleId` in the rules list first.
+ 
+## `parse_sarif.evaluate()`
+ 
+`evaluate()` is the one function both `sca_scan.py` and
+`container_scan.py` import and call, to turn a SARIF file into a gate
+decision:
+ 
+```python
+def evaluate(sarif_paths):
+    max_score = 0.0
+    for path in sarif_paths:
+        with open(path) as f:
+            sarif = json.load(f, strict=False)
+ 
+        for run in sarif.get("runs", []):
+            rules = run["tool"]["driver"].get("rules", [])
+            severities = {r["id"]: r.get("properties", {}).get("security-severity") for r in rules}
+ 
+            for result in run.get("results", []):
+                score = severities.get(result["ruleId"])
+                if score is not None:
+                    max_score = max(max_score, float(score))
+ 
+    return EvaluationResult(
+        gate_failed=max_score >= 8,
+        gate_warn=5 <= max_score < 8,
+    )
+```
+ 
+In pseudo code, what it does:
+ 
+```
+build a lookup: rule id -> security-severity score, from tool.driver.rules
+ 
+for each result in the SARIF file:
+    look up its score using the lookup above
+    keep track of the highest score seen across every result, in every run,
+    in every file passed in
+ 
+return gate_failed (highest score is 8.0 or above)
+return gate_warn (highest score is 5.0 up to 8.0)
+```
+ 
+One number, the single highest score found anywhere in the file(s)
+passed in, decides the whole outcome. `evaluate()` can also take a list
+of paths instead of one, that is how `sca_scan.py` could evaluate
+multiple SARIF files as a single gate decision if it needed to, though in
+practice each tool's SARIF file is evaluated on its own.
+ 
+For the actual pass and fail thresholds (`5.0`, `8.0`) and why they were
+chosen, see [gate-status-cvss.md](gate-status-cvss.md). OpenGrep and
+Hadolint don't go through `evaluate()` at all, their SARIF output has no
+`security-severity` score to read, see
+[gate-status-rule-severity.md](gate-status-rule-severity.md) for how
+their gate works instead.
